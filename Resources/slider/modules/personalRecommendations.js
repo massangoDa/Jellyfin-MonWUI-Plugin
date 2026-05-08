@@ -31,12 +31,31 @@ import {
   invalidateManagedSectionRenderKeys,
   registerManagedHomeRowAnchor,
   waitForManagedHomeRowRelease,
+  waitForManagedSectionDependencyCompletion,
   waitForSectionTailAdvance
 } from "./homeSectionChain.js";
 
 const config = getConfig();
 const labels = getLanguageLabels?.() || {};
 const IS_MOBILE = (navigator.maxTouchPoints > 0) || (window.innerWidth <= 820);
+
+function isMobileWebViewRuntime() {
+  try {
+    const ua = String((typeof navigator !== "undefined" && navigator.userAgent) || "");
+    const uaMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    if (!uaMobile) return false;
+
+    const standalone = window.navigator?.standalone === true
+      || window.matchMedia?.("(display-mode: standalone)")?.matches === true;
+    const isWV = /\bwv\b|Crosswalk/i.test(ua);
+    const hasBridge = !!(window.cordova || window.Capacitor || window.ReactNativeWebView);
+    return !!(standalone || isWV || hasBridge);
+  } catch {
+    return false;
+  }
+}
+
+const IS_MOBILE_WEBVIEW = isMobileWebViewRuntime();
 const UNIFIED_ROW_ITEM_LIMIT = 20;
 const MIN_RATING = Number.isFinite(config.studioHubsMinRating)
   ? Math.max(0, Number(config.studioHubsMinRating))
@@ -56,11 +75,11 @@ const GENRE_LAZY = true;
 const MOBILE_ROW_BATCH_SIZE = 1;
 const DESKTOP_INITIAL_GENRE_LOADS = 1;
 const GENRE_BATCH_SIZE = 1;
-const GENRE_ROOT_MARGIN = '500px 0px';
+const GENRE_ROOT_MARGIN = IS_MOBILE_WEBVIEW ? "720px 0px" : "500px 0px";
 const MANAGED_ROW_RELEASE_ROOT_MARGIN = IS_MOBILE
-  ? "0px 0px 60% 0px"
+  ? (IS_MOBILE_WEBVIEW ? "0px 0px 78% 0px" : "0px 0px 60% 0px")
   : "0px 0px 22% 0px";
-const GENRE_FIRST_SCROLL_PX = Number(getConfig()?.genreRowsFirstBatchScrollPx) || 200;
+const GENRE_FIRST_SCROLL_PX = Number(getConfig()?.genreRowsFirstBatchScrollPx) || (IS_MOBILE_WEBVIEW ? 320 : 200);
 const MIN_GENRE_VISIBLE_CARD_COUNT = 3;
 const PRC_LOCK_DOWN_SCROLL = (getConfig()?.prcLockDownScrollDuringLoad === true);
 
@@ -744,6 +763,15 @@ function scheduleDeferredGenreHubsRender({ force = false, seq = __deferredHomeSe
       if (seq !== __deferredHomeSectionSeq) return false;
       if (!hasActivePersonalRecsHomeSections()) {
         prcWarn("GENRE:abort:no-home-sections", { force, seq });
+        return false;
+      }
+      try {
+        await waitForManagedSectionDependencyCompletion("genreHubs", {
+          timeoutMs: 25000,
+          requireCompletion: true,
+        });
+      } catch {}
+      if (seq !== __deferredHomeSectionSeq || !hasActivePersonalRecsHomeSections()) {
         return false;
       }
       await renderGenreHubs(currentIndexPage());

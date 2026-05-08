@@ -924,6 +924,13 @@ const USER_ONLY_KEYS = [
               showOsdHeaderCommunityRating: formData.get('pauseOverlayShowOsdHeaderCommunityRating') === 'on',
               showOsdHeaderCriticRating: formData.get('pauseOverlayShowOsdHeaderCriticRating') === 'on',
               showOsdHeaderOfficialRating: formData.get('pauseOverlayShowOsdHeaderOfficialRating') === 'on',
+              showOsdHeaderClock: formData.get('pauseOverlayShowOsdHeaderClock') === 'on',
+              osdHeaderClockFormat: (() => {
+                const value = String(formData.get('pauseOverlayOsdHeaderClockFormat') || '').trim().toLowerCase();
+                if (value === '24h') return '24h';
+                if (value === '12h') return '12h';
+                return 'auto';
+              })(),
               minVideoMinutes: pauseOverlayMinDurMin,
               showAgeBadge: formData.get('pauseOverlayShowAgeBadge') === 'on',
               ageBadgeDurationMs: Math.max(1000, (parseInt(formData.get('ageBadgeDurationSec'), 10) || 6) * 1000),

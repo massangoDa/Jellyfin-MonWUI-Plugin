@@ -343,7 +343,7 @@ export async function updateModalContent(item, videoUrl) {
   });
   const isFavorite = item.UserData?.IsFavorite || false;
   const videoStream = item.MediaStreams ? item.MediaStreams.find(s => s.Type === "Video") : null;
-  const qualityText = videoStream ? getVideoQualityText(videoStream) : '';
+  const qualityText = videoStream ? getVideoQualityText(videoStream, item.MediaStreams) : '';
 
   modalState.modalMeta.innerHTML = [
     qualityText,
@@ -1236,15 +1236,48 @@ function mountTrailerBadge(card, text = 'Fragman') {
   const getId = (host) =>
     host?.dataset?.itemId || host?.dataset?.id || host?.closest?.('[data-id]')?.dataset?.id || null;
 
-  const openFromBadge = (evt) => {
+  let lastBadgeOpenAt = 0;
+  const openFromBadge = async (evt) => {
     if (evt.cancelable) evt.preventDefault();
     evt.stopImmediatePropagation();
     evt.stopPropagation();
+
+    const now = Date.now();
+    if (now - lastBadgeOpenAt < 700) return;
+    lastBadgeOpenAt = now;
+
     try { navigator.vibrate?.(8); } catch {}
     const itemId = getId(card);
     if (!itemId) return;
-    modalState.__suppressOpenUntil = 0;
-   openPreviewModalForItem(itemId, card, { bypass: true });
+    suppressHoverOpens(1600);
+
+    try {
+      await ensureOverlaysClosed();
+    } catch {}
+
+    if (typeof openDetailsModal === 'function') {
+      try {
+        await openDetailsModal({ itemId, originEl: card });
+        return;
+      } catch (err) {
+        console.warn('openDetailsModal failed (trailer badge):', err);
+      }
+    }
+
+    try {
+      if (window.showItemDetailsPage) {
+        window.showItemDetailsPage(itemId);
+        return;
+      }
+      const dialog = document.querySelector('.dialogContainer');
+      if (dialog) {
+        const event = new CustomEvent('showItemDetails', { detail: { Id: itemId } });
+        document.dispatchEvent(event);
+        return;
+      }
+    } catch {}
+
+    goToDetailsPageSafe(itemId);
   };
 
   el.addEventListener('click', openFromBadge, { passive: false });
@@ -2125,14 +2158,26 @@ function injectOrUpdateModalStyle() {
       margin: 0 0 -6px 0;
     }
 
-    .video-preview-modal img.range-icon,
-    .video-preview-modal img.codec-icon,
-    .video-preview-modal img.quality-icon {
-      width: 24px;
-      height: 18px;
-      background: rgba(30, 30, 40, 0.7);
+    .video-preview-modal .preview-meta .monwui-quality-group {
+      align-items: center;
+      display: inline-flex !important;
+      flex-direction: row !important;
+      flex-wrap: nowrap !important;
+      flex-shrink: 0;
+      gap: 2px;
+      justify-content: flex-start;
+    }
+
+    .video-preview-modal .preview-meta .monwui-quality-segment {
+      align-items: center;
+      display: inline-flex !important;
+      flex-direction: row !important;
+      justify-content: center;
+      white-space: nowrap;
       border-radius: 4px;
-      padding: 1px;
+      background: rgba(56, 60, 90, 0.76);
+      color: #fff;
+      border: 1px solid rgba(194, 194, 255, 0.17);
     }
 
     .video-preview-modal .preview-genres {

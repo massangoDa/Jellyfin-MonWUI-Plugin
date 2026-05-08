@@ -1254,7 +1254,7 @@ function getDetailFor(n) {
 
   const imgSrc = safePosterImageSrc(d.ok ? d.data : null, 80, 80);
   const vStream = d.ok ? (Array.isArray(d.data?.MediaStreams) ? d.data.MediaStreams.find(s => s.Type === "Video") : null) : null;
-  const qualityHtml = vStream ? getVideoQualityText(vStream) : "";
+  const qualityHtml = vStream ? getVideoQualityText(vStream, d.data?.MediaStreams) : "";
 
   const isUnread = !n.read;
   if (isUnread) li.classList.add("unread");
@@ -1380,7 +1380,7 @@ async function renderResume() {
       const remainingSec = Math.max(totalSec - playedSec, 0);
       const d = details[idx];
       const vStream = d && Array.isArray(d.MediaStreams) ? d.MediaStreams.find(s => s.Type === "Video") : null;
-      const qualityHtml = vStream ? getVideoQualityText(vStream) : "";
+      const qualityHtml = vStream ? getVideoQualityText(vStream, d?.MediaStreams) : "";
 
       card.innerHTML = `
         ${hasPrimaryImage(it) ? `<img class="poster" src="${escapeHtml(jfUrl(safePosterImageSrc(it, 160, 80)))}" alt="">` : ""}

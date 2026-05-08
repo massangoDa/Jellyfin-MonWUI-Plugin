@@ -13,7 +13,7 @@ let sliderHeaderRafId = 0;
 function normalizeSliderVariant(value) {
   const variant = String(value ?? '').trim().toLowerCase();
   if (!variant) return 'normalslider';
-  if (variant.includes('full')) return 'fullslider';
+  if (variant.includes('full')) return 'normalslider';
   if (variant.includes('peak')) return 'peakslider';
   if (variant.includes('normal')) return 'normalslider';
   if (variant.includes('slider')) return 'slider';

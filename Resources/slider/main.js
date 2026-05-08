@@ -2299,8 +2299,19 @@ function whenFirstSlideReadyOrTimeout(cb, timeoutMs = 7000) {
     return {};
   }
 
+  function normalizeCssVariant(value) {
+    const variant = String(value || '').trim().toLowerCase();
+    if (!variant) return 'normalslider';
+    if (variant.includes('aurora')) return 'auroraslider';
+    if (variant.includes('peak')) return 'peakslider';
+    if (variant.includes('full')) return 'normalslider';
+    if (variant.includes('normal')) return 'normalslider';
+    if (variant.includes('slider')) return 'slider';
+    return 'normalslider';
+  }
+
   function getCssVariant(cfg = getLiveConfig()) {
-    return cfg.cssVariant || 'normalslider';
+    return normalizeCssVariant(cfg?.cssVariant);
   }
 
   function matchesAny(selectors = []) {
@@ -2529,7 +2540,6 @@ function whenFirstSlideReadyOrTimeout(cb, timeoutMs = 7000) {
 
   const vmap = {
     peakslider: '/slider/src/peakslider.css',
-    fullslider: '/slider/src/fullslider.css',
     normalslider: '/slider/src/normalslider.css',
     slider: '/slider/src/slider.css',
     auroraslider: '/slider/src/auroraSlider.css'
@@ -2603,7 +2613,6 @@ function whenFirstSlideReadyOrTimeout(cb, timeoutMs = 7000) {
     if (!sliderCssEnabled) {
       removeCssByHref([
         'slider/src/peakslider.css',
-        'slider/src/fullslider.css',
         'slider/src/normalslider.css',
         'slider/src/slider.css',
         'slider/src/auroraSlider.css'

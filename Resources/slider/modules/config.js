@@ -95,6 +95,16 @@ export function normalizeManagedCardTitleDisplayMode(value) {
   }
 }
 
+function normalizeSliderCssVariant(value) {
+  const variant = String(value || "").trim().toLowerCase();
+  if (!variant) return "normalslider";
+  if (variant.includes("peak")) return "peakslider";
+  if (variant.includes("full")) return "normalslider";
+  if (variant.includes("normal")) return "normalslider";
+  if (variant.includes("slider")) return "slider";
+  return "normalslider";
+}
+
 function isRecognizedManagedHomeSectionOrderKey(value) {
   const key = String(value || "").trim();
   return !!key && (
@@ -440,8 +450,8 @@ export function getConfig() {
   }
 
   function readPeakSlider() {
-  const variant = (localStorage.getItem('cssVariant') || 'normalslider').toLowerCase();
-  const isPeakLike = ['peak', 'peakslider', 'peak-skin'].includes(variant);
+  const variant = normalizeSliderCssVariant(localStorage.getItem('cssVariant'));
+  const isPeakLike = variant === 'peakslider';
   if (variant) return isPeakLike;
   const explicit = localStorage.getItem('peakSlider');
   return explicit === 'true';
@@ -504,6 +514,17 @@ export function getConfig() {
   const fallbackShowOsdHeaderCommunityRating = localStorage.getItem('showCommunityRating') !== 'false';
   const fallbackShowOsdHeaderCriticRating = localStorage.getItem('showCriticRating') !== 'false';
   const fallbackShowOsdHeaderOfficialRating = localStorage.getItem('showOfficialRating') !== 'false';
+  const fallbackShowOsdHeaderClock = localStorage.getItem('showOsdHeaderClock') !== 'false';
+  const normalizeOsdHeaderClockFormat = (value) => {
+    const raw = String(value || '').trim().toLowerCase();
+    if (raw === '24' || raw === '24h' || raw === 'h23' || raw === 'hour24') return '24h';
+    if (raw === '12' || raw === '12h' || raw === 'h12' || raw === 'ampm') return '12h';
+    return 'auto';
+  };
+  const fallbackOsdHeaderClockFormat = normalizeOsdHeaderClockFormat(
+    localStorage.getItem('pauseOverlayOsdHeaderClockFormat') ||
+    localStorage.getItem('osdHeaderClockFormat')
+  );
   const normalizePauseOverlayCssVariant = (value) =>
     String(value || '').trim() === 'pauseModul2' ? 'pauseModul2' : 'pauseModul';
   const readPauseBool = (obj, key, fallback) =>
@@ -531,6 +552,8 @@ export function getConfig() {
         showOsdHeaderCommunityRating: readPauseBool(j, 'showOsdHeaderCommunityRating', fallbackShowOsdHeaderCommunityRating),
         showOsdHeaderCriticRating: readPauseBool(j, 'showOsdHeaderCriticRating', fallbackShowOsdHeaderCriticRating),
         showOsdHeaderOfficialRating: readPauseBool(j, 'showOsdHeaderOfficialRating', fallbackShowOsdHeaderOfficialRating),
+        showOsdHeaderClock: readPauseBool(j, 'showOsdHeaderClock', fallbackShowOsdHeaderClock),
+        osdHeaderClockFormat: normalizeOsdHeaderClockFormat(j.osdHeaderClockFormat),
         minVideoMinutes: safeMin,
         ageBadgeDurationMs: _num(j.ageBadgeDurationMs, 12000),
         ageBadgeLockMs: _num(j.ageBadgeLockMs, 6000),
@@ -543,12 +566,15 @@ export function getConfig() {
         'showOsdHeaderRatings',
         'showOsdHeaderCommunityRating',
         'showOsdHeaderCriticRating',
-        'showOsdHeaderOfficialRating'
+        'showOsdHeaderOfficialRating',
+        'showOsdHeaderClock',
+        'osdHeaderClockFormat'
       ].some(key => !Object.prototype.hasOwnProperty.call(j, key));
       if (
         safeMin !== mv ||
         missingOsdRatingKeys ||
-        normalizePauseOverlayCssVariant(j.cssVariant) !== String(j.cssVariant || '')
+        normalizePauseOverlayCssVariant(j.cssVariant) !== String(j.cssVariant || '') ||
+        normalizeOsdHeaderClockFormat(j.osdHeaderClockFormat) !== String(j.osdHeaderClockFormat || '')
       ) {
         try { localStorage.setItem('pauseOverlay', JSON.stringify(cfg)); } catch {}
       }
@@ -585,6 +611,8 @@ export function getConfig() {
     showOsdHeaderCommunityRating: fallbackShowOsdHeaderCommunityRating,
     showOsdHeaderCriticRating: fallbackShowOsdHeaderCriticRating,
     showOsdHeaderOfficialRating: fallbackShowOsdHeaderOfficialRating,
+    showOsdHeaderClock: fallbackShowOsdHeaderClock,
+    osdHeaderClockFormat: fallbackOsdHeaderClockFormat,
     minVideoMinutes: safeMinLegacy,
     ageBadgeDurationMs: 12000,
     ageBadgeLockMs: 6000,
@@ -634,6 +662,14 @@ export function getConfig() {
     showCommunityRating: localStorage.getItem('showCommunityRating') !== 'false',
     showCriticRating: localStorage.getItem('showCriticRating') !== 'false',
     showOfficialRating: localStorage.getItem('showOfficialRating') !== 'false',
+    showOsdHeaderClock: localStorage.getItem('showOsdHeaderClock') !== 'false',
+    osdHeaderClockFormat: (() => {
+      const raw = localStorage.getItem('osdHeaderClockFormat') || '';
+      const normalized = String(raw || '').trim().toLowerCase();
+      if (normalized === '24' || normalized === '24h' || normalized === 'h23' || normalized === 'hour24') return '24h';
+      if (normalized === '12' || normalized === '12h' || normalized === 'h12' || normalized === 'ampm') return '12h';
+      return 'auto';
+    })(),
     showStatusInfo: localStorage.getItem('showStatusInfo') !== 'false',
     showTypeInfo: localStorage.getItem('showTypeInfo') !== 'false',
     showWatchedInfo: localStorage.getItem('showWatchedInfo') !== 'false',
@@ -692,7 +728,7 @@ export function getConfig() {
     useRandomContent: localStorage.getItem('useRandomContent') !== 'false',
     fullscreenMode: localStorage.getItem('fullscreenMode') === 'true' ? true : false,
     listLimit: 20,
-    version: "v2.8.0",
+    version: "v2.9.0",
     historySize: 20,
     updateInterval: 300000,
     nextTracksSource: localStorage.getItem('nextTracksSource') || 'playlist',
@@ -1164,7 +1200,7 @@ export function getConfig() {
     minHighQualityWidth: parseInt(localStorage.getItem("minHighQualityWidth"), 10) || 1920,
     backdropMaxWidth: parseInt(localStorage.getItem("backdropMaxWidth"), 10) || 1920,
     minPixelCount: parseInt(localStorage.getItem("minPixelCount"), 10) || (1920 * 1080),
-    cssVariant: localStorage.getItem('cssVariant') || 'normalslider',
+    cssVariant: normalizeSliderCssVariant(localStorage.getItem('cssVariant')),
     peakSlider: readPeakSlider(),
     peakDiagonal: (() => {
       const v = localStorage.getItem('peakDiagonal');

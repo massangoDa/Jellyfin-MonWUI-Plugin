@@ -560,7 +560,7 @@ function fillMiniContent(pop, itemBase, details) {
       : null;
 
     if (videoStream) {
-      const html = getVideoQualityText(videoStream);
+      const html = getVideoQualityText(videoStream, item.MediaStreams);
       if (html && html.trim().length) {
         qualityEl.innerHTML = html;
         qualityEl.style.display = "";

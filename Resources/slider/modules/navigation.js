@@ -1079,13 +1079,12 @@ export function createDotNavigation() {
         const mediaStreams = slide.dataset.mediaStreams ? JSON.parse(slide.dataset.mediaStreams) : [];
         const videoStream = mediaStreams.find(s => s.Type === "Video");
         if (videoStream) {
-            const qualityText = getVideoQualityText(videoStream);
+            const qualityText = getVideoQualityText(videoStream, mediaStreams);
             if (qualityText) {
                 const qualityBadge = document.createElement("div");
                 qualityBadge.className = "monwui-dot-quality-badge";
                 qualityBadge.innerHTML = `${qualityText}`;
                 dot.appendChild(qualityBadge);
-                const style = document.createElement("style");
             }
         }
     } catch (e) {
@@ -2013,21 +2012,12 @@ function ensureDotQualityBadgeCSS() {
       position: absolute;
       bottom: 24px;
       left: 2px;
-      color: white;
-      display: flex;
-      gap: 2px;
-      flex-direction: column;
+      pointer-events: none;
+      z-index: 4;
     }
-    .monwui-dot-quality-badge img.range-icon,
-    .monwui-dot-quality-badge img.codec-icon,
-    .monwui-dot-quality-badge img.quality-icon {
-      width: 20px;
-      height: 14px;
-      background: rgba(30,30,40,.7);
-      border-radius: 4px;
-      padding: 1px;
-      object-fit: contain;
-      transition: all .3s ease;
+    .monwui-dot-quality-badge .monwui-quality-group {
+      --monwui-quality-direction: column;
+      --monwui-quality-wrap: nowrap;
     }
   `;
   document.head.appendChild(style);

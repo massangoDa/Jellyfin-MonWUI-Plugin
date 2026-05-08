@@ -34,6 +34,24 @@ import {
 const config = getConfig();
 const labels = getLanguageLabels?.() || {};
 const IS_MOBILE = (navigator.maxTouchPoints > 0) || (window.innerWidth <= 820);
+
+function isMobileWebViewRuntime() {
+  try {
+    const ua = String((typeof navigator !== "undefined" && navigator.userAgent) || "");
+    const uaMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    if (!uaMobile) return false;
+
+    const standalone = window.navigator?.standalone === true
+      || window.matchMedia?.("(display-mode: standalone)")?.matches === true;
+    const isWV = /\bwv\b|Crosswalk/i.test(ua);
+    const hasBridge = !!(window.cordova || window.Capacitor || window.ReactNativeWebView);
+    return !!(standalone || isWV || hasBridge);
+  } catch {
+    return false;
+  }
+}
+
+const IS_MOBILE_WEBVIEW = isMobileWebViewRuntime();
 const UNIFIED_ROW_ITEM_LIMIT = 20;
 const PLACEHOLDER_URL = resolveSliderAssetHref(
   config.placeholderImage || "/slider/src/images/placeholder.png"
@@ -82,7 +100,7 @@ const HOME_TRACE_STORAGE_KEY = "jms:trace:home-sections";
 // behind the first visible ones and make them appear nondeterministic.
 const RECENT_ROWS_EAGER_RELEASE_COUNT = 1024;
 const RECENT_ROWS_RELEASE_ROOT_MARGIN = IS_MOBILE
-  ? "0px 0px 60% 0px"
+  ? (IS_MOBILE_WEBVIEW ? "0px 0px 78% 0px" : "0px 0px 60% 0px")
   : "0px 0px 22% 0px";
 
 function getLiveConfig() {

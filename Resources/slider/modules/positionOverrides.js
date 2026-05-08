@@ -113,7 +113,7 @@ function normalizeVariant(x) {
   if (!s) return 'normalslider';
 
   if (s.includes('normalslider') || s.includes('normal')) return 'normalslider';
-  if (s.includes('fullslider') || s.includes('full'))   return 'fullslider';
+  if (s.includes('full')) return 'normalslider';
   if (s.includes('peakslider') || s.includes('peak'))   return 'peakslider';
   if (s.includes('slider')) return 'slider';
   return 'normalslider';
@@ -128,7 +128,6 @@ function detectCssVariantFromDom() {
   const has = (s) => !!document.querySelector(`link[href*="${s}"]`);
   if (has('peakslider.css'))   return 'peakslider';
   if (has('normalslider.css')) return 'normalslider';
-  if (has('fullslider.css')) return 'fullslider';
   if (has('slider.css')) return 'slider';
   return 'normalslider';
 }
@@ -250,8 +249,7 @@ function getDefaultTopByVariant(variant) {
   const mobile = window.matchMedia?.('(max-width: 768px)')?.matches || isMobileDevice();
   if (mobile) {
     switch (variant) {
-      case 'normalslider': baseTop = -23; break;
-      case 'fullslider': baseTop = -16; break;
+      case 'normalslider': baseTop = -7.5; break;
       case 'peakslider': baseTop = -5.5; break;
       case 'slider': baseTop = -3; break;
       default: baseTop = 0; break;
@@ -259,7 +257,6 @@ function getDefaultTopByVariant(variant) {
   } else {
     switch (variant) {
       case 'normalslider': baseTop = -15; break;
-      case 'fullslider': baseTop = 6; break;
       case 'peakslider': baseTop = -3.5; break;
       case 'slider': baseTop = 1; break;
       default: baseTop = 0; break;

@@ -6,11 +6,11 @@ import { withServer } from "./jfUrl.js";
 import { getTomatoIconHtml } from "./customIcons.js";
 
 const config = getConfig();
-const QUALITY_SVG_BY_LEVEL = {
-  sd: "./slider/src/images/quality/sd.svg",
-  hd: "./slider/src/images/quality/hd.svg",
-  fhd: "./slider/src/images/quality/fhd.svg",
-  "4k": "./slider/src/images/quality/4k.svg"
+const QUALITY_LABEL_BY_LEVEL = {
+  sd: "SD",
+  hd: "HD",
+  fhd: "FHD",
+  "4k": "4K"
 };
 
 function escapeMetaHtml(value) {
@@ -112,8 +112,199 @@ function getVideoQualityInfo(videoStream) {
 
   return {
     baseQuality,
-    qualitySvg: QUALITY_SVG_BY_LEVEL[baseQuality] || QUALITY_SVG_BY_LEVEL.sd
+    qualityLabel: QUALITY_LABEL_BY_LEVEL[baseQuality] || QUALITY_LABEL_BY_LEVEL.sd
   };
+}
+
+function getVideoRangeLabel(videoStream) {
+  const range = String(videoStream?.VideoRangeType || "").toUpperCase();
+  if (!range) return "SDR";
+  if (range.includes("DOLBY") || range.includes("DOVI")) return "DV";
+  if (range.includes("HLG")) return "HLG";
+  if (range.includes("HDR")) return "HDR";
+  return "SDR";
+}
+
+function getVideoCodecLabel(videoStream) {
+  const codec = String(videoStream?.Codec || "").toLowerCase().trim();
+  if (!codec) return "";
+
+  if (codec.includes("av1")) return "AV1";
+  if (codec.includes("h265") || codec.includes("hevc") || codec.includes("x265")) return "HEVC";
+  if (codec.includes("h264") || codec.includes("avc") || codec.includes("x264")) return "AVC";
+  if (codec.includes("vp9")) return "VP9";
+  if (codec.startsWith("mpeg") || codec.includes("mpeg4")) return "MPEG";
+
+  return codec.replace(/[^a-z0-9]+/g, "").toUpperCase().slice(0, 5);
+}
+
+function getVideoBitDepthLabel(videoStream) {
+  const depth = Number(videoStream?.BitDepth || 0);
+  if (!Number.isFinite(depth) || depth <= 8) return "";
+  return `${Math.round(depth)}BIT`;
+}
+
+function getPrimaryAudioStream(mediaStreams = []) {
+  const audioStreams = Array.isArray(mediaStreams)
+    ? mediaStreams.filter(stream => stream?.Type === "Audio")
+    : [];
+
+  if (!audioStreams.length) return null;
+
+  return (
+    audioStreams.find(stream => stream?.IsDefault) ||
+    audioStreams.find(stream => Number(stream?.Index) >= 0) ||
+    audioStreams[0]
+  );
+}
+
+function getAudioCodecLabel(audioStream) {
+  if (!audioStream) return "";
+
+  const raw = [
+    audioStream.Codec,
+    audioStream.DisplayTitle,
+    audioStream.Title,
+    audioStream.Profile,
+    audioStream.CodecTag
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  if (!raw) return "";
+  if (raw.includes("atmos")) return "ATMOS";
+  if (raw.includes("truehd")) return "TRUEHD";
+  if (raw.includes("eac3") || raw.includes("dd+")) return "DDP";
+  if (raw.includes("ac3") || raw.includes("dolby digital")) return "DD";
+  if (raw.includes("dts-hd") || raw.includes("dtshd")) return "DTS-HD";
+  if (raw.includes("dts")) return "DTS";
+  if (raw.includes("flac")) return "FLAC";
+  if (raw.includes("aac")) return "AAC";
+  if (raw.includes("opus")) return "OPUS";
+  if (raw.includes("mp3")) return "MP3";
+  if (raw.includes("pcm") || raw.includes("lpcm")) return "PCM";
+
+  const codec = String(audioStream?.Codec || "").replace(/[^a-z0-9]+/gi, "").toUpperCase();
+  return codec.slice(0, 7);
+}
+
+function getAudioLayoutLabel(audioStream) {
+  if (!audioStream) return "";
+
+  const channels = Number(audioStream?.Channels || 0);
+  if (Number.isFinite(channels) && channels > 0) {
+    if (channels === 1) return "1.0";
+    if (channels === 2) return "2.0";
+    if (channels === 6) return "5.1";
+    if (channels === 8) return "7.1";
+    return `${channels}CH`;
+  }
+
+  const layout = String(audioStream?.ChannelLayout || "").toUpperCase().trim();
+  if (layout.includes("7.1")) return "7.1";
+  if (layout.includes("5.1")) return "5.1";
+  if (layout.includes("2.0")) return "2.0";
+  return "";
+}
+
+function buildQualitySegment(label, part) {
+  const safeLabel = escapeMetaHtml(String(label || "").trim());
+  if (!safeLabel) return "";
+  const safePart = escapeMetaHtml(part);
+  return `
+    <span class="monwui-quality-segment monwui-quality-segment--${safePart}" data-quality-part="${safePart}">
+      ${safeLabel}
+    </span>
+  `.trim();
+}
+
+export function ensureVideoQualityBadgeStyles() {
+  if (typeof document === "undefined") return;
+  if (document.getElementById("monwui-video-quality-style")) return;
+
+  const style = document.createElement("style");
+  style.id = "monwui-video-quality-style";
+  style.textContent = `
+    .monwui-quality-group {
+      --monwui-quality-size: 24px;
+      --monwui-quality-gap: 2px;
+      --monwui-quality-direction: row;
+      --monwui-quality-wrap: wrap;
+      align-items: flex-start;
+      display: inline-flex;
+      flex-direction: var(--monwui-quality-direction);
+      flex-wrap: var(--monwui-quality-wrap);
+      gap: var(--monwui-quality-gap);
+      justify-content: flex-start;
+      max-width: 100%;
+    }
+    .monwui-quality-segment {
+      align-items: center;
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 6px;
+      box-sizing: border-box;
+      color: #fff;
+      display: inline-flex;
+      font-family: var(--mwui-font-head, "Roboto Condensed", sans-serif);
+      font-size: 10px;
+      font-weight: 700;
+      height: var(--monwui-quality-size);
+      justify-content: center;
+      letter-spacing: 0.04em;
+      line-height: 1;
+      min-width: var(--monwui-quality-size);
+      padding: 0 4px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .monwui-quality-segment--level {
+      background: rgba(37, 99, 235, 0.92);
+    }
+    .monwui-quality-segment--range {
+      background: rgba(234, 88, 12, 0.92);
+    }
+    .monwui-quality-segment--codec {
+      background: rgba(71, 85, 105, 0.92);
+    }
+    .monwui-quality-segment--bitdepth {
+      background: rgba(79, 70, 229, 0.92);
+    }
+    .monwui-quality-segment--audio {
+      background: rgba(5, 150, 105, 0.92);
+    }
+    .monwui-quality-segment--audio-layout {
+      background: rgba(8, 145, 178, 0.92);
+    }
+    .monwui-dot-quality-badge,
+    .mini-quality-inline,
+    .monwui-meta-container .video-quality,
+    .quality-badge .quality-text,
+    .jf-notif-item .quality,
+    .jf-resume-card .quality {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .quality-badge,
+    .monwui-dot-quality-badge {
+      --monwui-quality-direction: column;
+      --monwui-quality-wrap: nowrap;
+    }
+    .quality-badge .quality-text {
+      align-items: flex-start;
+      background: none;
+      border-radius: 0;
+      padding: 0;
+    }
+    .quality-badge .monwui-quality-group,
+    .monwui-dot-quality-badge .monwui-quality-group {
+      align-items: flex-start;
+    }
+    .jf-resume-card .quality {
+      justify-content: center;
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 export function createSlidesContainer(indexPage) {
@@ -243,36 +434,13 @@ export function createStatusContainer(itemType, config, UserData, ChildCount, Ru
 
   const videoStream = MediaStreams ? MediaStreams.find(s => s.Type === "Video") : null;
   if (videoStream && config.showQualityInfo) {
-    const qualitySpan = document.createElement("span");
-    qualitySpan.className = "video-quality";
-    const { qualitySvg } = getVideoQualityInfo(videoStream);
-
-    let rangeSvg = `./slider/src/images/quality/sdr.svg`;
-    if (videoStream.VideoRangeType && videoStream.VideoRangeType.toUpperCase().includes("HDR")) {
-      rangeSvg = `./slider/src/images/quality/hdr.svg`;
+    const qualityHtml = getVideoQualityText(videoStream, MediaStreams);
+    if (qualityHtml) {
+      const qualitySpan = document.createElement("span");
+      qualitySpan.className = "video-quality";
+      qualitySpan.innerHTML = qualityHtml;
+      statusContainer.appendChild(qualitySpan);
     }
-
-    let codecSvg = "";
-    if (videoStream.Codec) {
-      const codec = videoStream.Codec.toLowerCase();
-      if (codec.includes("h264")) {
-        codecSvg = `<img src="./slider/src/images/quality/h264.svg" alt="H.264" style="width:24px;height:24px;vertical-align:middle;margin-right:2px;">`;
-      } else if (codec.includes("h265") || codec.includes("hevc")) {
-        codecSvg = `<img src="./slider/src/images/quality/h265.svg" alt="H.265" style="width:24px;height:24px;vertical-align:middle;margin-right:2px;">`;
-      } else if (codec.includes("vp9")) {
-        codecSvg = `<img src="./slider/src/images/quality/vp9.svg" alt="VP9" style="width:24px;height:24px;vertical-align:middle;margin-right:2px;">`;
-      } else if (codec.startsWith("mpeg") || codec.includes("mpeg4")) {
-        codecSvg = `<img src="./slider/src/images/quality/mpeg.svg" alt="MPEG" style="width:24px;height:24px;vertical-align:middle;margin-right:2px;">`;
-      }
-    }
-
-    qualitySpan.innerHTML = `
-      <img src="${rangeSvg}" alt="" style="width:24px;height:24px;vertical-align:middle;margin-right:2px;">
-      <img src="${qualitySvg}" alt="" style="width:24px;height:24px;vertical-align:middle;margin-right:2px;">
-      ${codecSvg}
-    `.trim();
-
-    statusContainer.appendChild(qualitySpan);
   }
 
   return statusContainer;
@@ -797,35 +965,45 @@ export function createTitleContainer({ config, Taglines, title, OriginalTitle, T
   return container;
 }
 
-export function getVideoQualityText(videoStream) {
+export function getVideoQualityText(videoStream, mediaStreams = null) {
   if (!videoStream) return "";
+  ensureVideoQualityBadgeStyles();
 
-  const { baseQuality, qualitySvg } = getVideoQualityInfo(videoStream);
+  const { qualityLabel } = getVideoQualityInfo(videoStream);
+  const rangeLabel = getVideoRangeLabel(videoStream);
+  const codecLabel = getVideoCodecLabel(videoStream);
+  const bitDepthLabel = getVideoBitDepthLabel(videoStream);
 
-  let iconSvg;
-  if (videoStream.VideoRangeType && videoStream.VideoRangeType.toUpperCase().includes("HDR")) {
-    iconSvg = `./slider/src/images/quality/hdr.svg`;
-  } else {
-    iconSvg = `./slider/src/images/quality/sdr.svg`;
+  const videoParts = [
+    buildQualitySegment(qualityLabel, "level"),
+    buildQualitySegment(rangeLabel, "range"),
+    buildQualitySegment(codecLabel, "codec"),
+    buildQualitySegment(bitDepthLabel, "bitdepth")
+  ].filter(Boolean);
+
+  const audioStream = getPrimaryAudioStream(mediaStreams);
+  const audioParts = [
+    buildQualitySegment(getAudioCodecLabel(audioStream), "audio"),
+    buildQualitySegment(getAudioLayoutLabel(audioStream), "audio-layout")
+  ].filter(Boolean);
+
+  const groups = [];
+  if (videoParts.length) {
+    groups.push(`
+      <span class="monwui-quality-group" data-quality-group="video">
+        ${videoParts.join("")}
+      </span>
+    `.trim());
+  }
+  if (audioParts.length) {
+    groups.push(`
+      <span class="monwui-quality-group" data-quality-group="audio">
+        ${audioParts.join("")}
+      </span>
+    `.trim());
   }
 
-  let codecSvg = "";
-  if (videoStream.Codec) {
-    const codec = videoStream.Codec.toLowerCase();
-    if (codec.includes("h264")) {
-      codecSvg = `./slider/src/images/quality/h264.svg`;
-    } else if (codec.includes("h265") || codec.includes("hevc")) {
-      codecSvg = `./slider/src/images/quality/h265.svg`;
-    } else if (codec.includes("vp9")) {
-      codecSvg = `./slider/src/images/quality/vp9.svg`;
-    } else if (codec.startsWith("mpeg") || codec.includes("mpeg4")) {
-      codecSvg = `./slider/src/images/quality/mpeg.svg`;
-    }
-  }
+  if (!groups.length) return "";
 
-  return `
-    <img src="${qualitySvg}" alt="${baseQuality.toUpperCase()}" class="quality-icon">
-    <img src="${iconSvg}" alt="" class="range-icon">
-    ${codecSvg ? `<img src="${codecSvg}" alt="" class="codec-icon">` : ""}
-  `.trim();
+  return groups.join("");
 }

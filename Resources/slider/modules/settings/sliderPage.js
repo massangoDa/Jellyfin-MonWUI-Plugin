@@ -158,11 +158,19 @@ export function createSliderPanel(config, labels) {
   cssLabel.textContent = labels.gorunum || 'CSS Varyantı:';
   const cssSelect = document.createElement('select');
   cssSelect.name = 'cssVariant';
+  const activeCssVariant = (() => {
+    const variant = String(config.cssVariant || '').trim().toLowerCase();
+    if (!variant) return 'normalslider';
+    if (variant.includes('peak')) return 'peakslider';
+    if (variant.includes('full')) return 'normalslider';
+    if (variant.includes('normal')) return 'normalslider';
+    if (variant.includes('slider')) return 'slider';
+    return 'normalslider';
+  })();
 
   const variants = [
     { value: 'slider', label: labels.kompaktslider || 'Kompakt' },
     { value: 'normalslider' ,label: labels.normalslider || 'Normal' },
-    { value: 'fullslider', label: labels.tamslider || 'Tam Ekran' },
     { value: 'peakslider', label: (labels.peakslider || 'Peak') },
   ];
 
@@ -182,7 +190,7 @@ export function createSliderPanel(config, labels) {
     const option = document.createElement('option');
     option.value = variant.value;
     option.textContent = variant.label;
-    if (variant.value === config.cssVariant) {
+    if (variant.value === activeCssVariant) {
       option.selected = true;
     }
     cssSelect.appendChild(option);
@@ -191,7 +199,7 @@ export function createSliderPanel(config, labels) {
   const peakDiagonalCheckbox = createCheckbox(
     'peakDiagonal',
     labels.peakDiagonal || 'Diagonal Görünüm',
-    (config.cssVariant === 'peakslider') && !!config.peakDiagonal
+    (activeCssVariant === 'peakslider') && !!config.peakDiagonal
   );
 
   function updatePeakDiagonalVisibility() {
@@ -223,7 +231,7 @@ export function createSliderPanel(config, labels) {
   const baseDesc =
     labels.cssDescriptionBase ||
     labels.cssDescription ||
-    '• Tam Ekran Görünümü Masaüstü Ortamlarda Aktifleştirilmiş Poster Dot için Düzenlenmiştir.';
+    "• Poster boyutlu dot kullanıyorsanız, ana sayfanızı 'Konumlandırma Ayarları' sekmesinden düzenlemelisiniz.";
   const mobileNote =
     labels.cssMobileNote ||
     '• Vitrin görünüm henüz mobil için hazır değil.';
