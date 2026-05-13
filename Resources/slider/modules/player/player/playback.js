@@ -700,6 +700,21 @@ function clearMarqueeTimers() {
   if (_marqueeT1) { clearTimeout(_marqueeT1); _marqueeT1 = null; }
 }
 
+export function clearPlaybackRuntimeCaches() {
+  _streamReqId += 1;
+  _metaReqId += 1;
+  _artReqId += 1;
+  try { cleanupAudioListeners(); } catch {}
+  clearMarqueeTimers();
+  if (_loadedMetaRetryT) {
+    clearTimeout(_loadedMetaRetryT);
+    _loadedMetaRetryT = null;
+  }
+  currentCanPlayHandler = null;
+  currentPlayErrorHandler = null;
+  resolvedAudioUrlCache.clear();
+}
+
 async function getEmbeddedImage(trackId) {
   const tags = await readID3Tags(trackId);
   return tags?.pictureUri || null;

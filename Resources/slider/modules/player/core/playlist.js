@@ -15,6 +15,13 @@ const EXCLUDED_LISTS_HISTORY = config.historylimit;
 let excludedTrackHistory = new Set();
 let currentRefreshCtrl = null;
 
+export function cleanupPlaylistRuntimeState() {
+  try { currentRefreshCtrl?.abort?.(); } catch {}
+  currentRefreshCtrl = null;
+  try { excludedTrackHistory.clear(); } catch {}
+  excludedTrackHistory = new Set();
+}
+
 export async function refreshPlaylist() {
   if (currentRefreshCtrl) {
     try { currentRefreshCtrl.abort(); } catch {}

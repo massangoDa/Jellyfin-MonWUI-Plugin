@@ -2,6 +2,8 @@ import { getConfig } from "./config.js";
 import { forceHomeSectionsTop } from './positionOverrides.js';
 
 const HEADER_OFFSET_VAR = '--jms-slider-header-offset-px';
+const HEADER_REFERENCE_TOP_VAR = '--jms-slider-header-reference-top';
+const VISUAL_TOP_VAR = '--jms-slider-visual-top';
 
 let sliderHeaderResizeObserver = null;
 let sliderHeaderObservedEl = null;
@@ -20,6 +22,7 @@ const SLIDER_HEADER_RELEVANT_SELECTOR = [
   '.skinHeader',
   '.mainDrawer',
   '.mainDrawerButton',
+  '#monwui-slides-container',
   '#indexPage',
   '#homePage',
   "[data-role='page']",
@@ -107,6 +110,48 @@ function readSliderHeaderOffsetPx(container) {
     '';
   const numericValue = Number.parseFloat(rawValue);
   return Number.isFinite(numericValue) ? numericValue : 0;
+}
+
+function readCustomProperty(element, name) {
+  if (!element || !name) return '';
+  return (
+    element.style.getPropertyValue(name) ||
+    window.getComputedStyle?.(element)?.getPropertyValue?.(name) ||
+    ''
+  ).trim();
+}
+
+function resolveCssLengthPx(rawValue, contextElement, fallback = 0) {
+  const value = String(rawValue ?? '').trim();
+  if (!value) return fallback;
+
+  const probe = document.createElement('div');
+  const parent = contextElement?.isConnected ? contextElement : document.body;
+  if (!parent) return fallback;
+
+  probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;left:-9999px;top:0;width:0;height:0;contain:strict;';
+  probe.style.top = value;
+
+  try {
+    parent.appendChild(probe);
+    const resolved = Number.parseFloat(window.getComputedStyle?.(probe)?.top || '');
+    return Number.isFinite(resolved) ? resolved : fallback;
+  } catch {
+    return fallback;
+  } finally {
+    try { probe.remove(); } catch {}
+  }
+}
+
+function readCssLengthVarPx(element, name, fallback = 0) {
+  const rawValue = readCustomProperty(element, name);
+  return resolveCssLengthPx(rawValue, element, fallback);
+}
+
+function readSliderVisualTopDeltaPx(container) {
+  const referenceTopPx = readCssLengthVarPx(container, HEADER_REFERENCE_TOP_VAR, 0);
+  const visualTopPx = readCssLengthVarPx(container, VISUAL_TOP_VAR, referenceTopPx);
+  return visualTopPx - referenceTopPx;
 }
 
 function setSliderHeaderOffsetVar(container, offsetPx) {
@@ -244,7 +289,7 @@ function computeSliderHeaderOffsetPx(header, container) {
   const headerRect = header?.getBoundingClientRect?.();
   const slideRect = container?.getBoundingClientRect?.();
   const headerBottom = Number(headerRect?.bottom || 0);
-  const slideTop = Number(slideRect?.top || 0);
+  const slideTop = Number(slideRect?.top || 0) - readSliderVisualTopDeltaPx(container);
 
   if (!Number.isFinite(headerBottom) || !Number.isFinite(slideTop)) return 0;
 
@@ -360,8 +405,11 @@ export function updateSlidePosition() {
     });
   });
 
-  const sliderWrapper = document.querySelector(".monwui-slider-wrapper");
-  if (sliderWrapper) applyContainerStyles(sliderWrapper, 'slider');
+  document.querySelectorAll(".monwui-slider-wrapper").forEach(sliderWrapper => {
+    if (!sliderWrapper.classList.contains("monwui-artist-menu")) {
+      applyContainerStyles(sliderWrapper, 'slider');
+    }
+  });
 
   const progressBar = document.querySelector(".monwui-slide-progress-bar");
   if (progressBar) applyContainerStyles(progressBar, 'progress');

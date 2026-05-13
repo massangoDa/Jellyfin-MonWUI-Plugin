@@ -294,7 +294,7 @@ export function createPausePanel(_config, labels) {
   sapDesc.className = 'description-text';
   sapDesc.textContent =
     labels.smartAutoPauseDescription ||
-    'Odak kaybı, sekmenin gizlenmesi/minimize ve kullanıcı etkinliği yokluğunda videoyu belirtilen dakikalar sonra durdurur. Ondalıklı değerleri (örn. 0.2 dk) destekler.';
+    'Pencere odağı kaybedildiğinde, sekme gizlendiğinde/minimize edildiğinde veya kullanıcı etkinliği algılanmadığında video otomatik durdurulur. İlgili alan için 0 değeri girilirse o koşul tamamen devre dışı kalır.';
   sapSec.appendChild(sapDesc);
 
   function addNumberRow({name, label, value, min=0.1, max=1000, step=0.1, suffix=labels.dk})  {
@@ -359,8 +359,8 @@ export function createPausePanel(_config, labels) {
     addNumberRow({
       name: 'sapBlurMs',
       label: (labels.smartUnfocusedThreshold || 'Odak dışı bekleme') + ' (ms)',
-      value: Math.round(sap.blurMinutes * 60000),
-      min: 100,
+      value: Math.max(0, Math.round(Number(sap.blurMinutes || 0) * 60000)),
+      min: 0,
       max: TWO_HOURS_MS,
       step: 100,
       suffix: labels.ms || 'ms'
@@ -371,8 +371,8 @@ export function createPausePanel(_config, labels) {
     addNumberRow({
       name: 'sapHiddenMs',
       label: (labels.smartOffscreenThreshold || 'Sekme gizli/minimize bekleme') + ' (ms)',
-      value: Math.round(sap.hiddenMinutes * 60000),
-      min: 100,
+      value: Math.max(0, Math.round(Number(sap.hiddenMinutes || 0) * 60000)),
+      min: 0,
       max: TWO_HOURS_MS,
       step: 100,
       suffix: labels.ms || 'ms'
@@ -383,8 +383,8 @@ export function createPausePanel(_config, labels) {
     addNumberRow({
       name: 'sapIdleMinutes',
       label: labels.smartIdleThreshold || 'Etkinlik yok bekleme',
-      value: sap.idleMinutes,
-      min: 1,
+      value: Math.max(0, Number(sap.idleMinutes || 0)),
+      min: 0,
       max: 1000,
       step: 1,
       suffix: labels.dk || 'dk'

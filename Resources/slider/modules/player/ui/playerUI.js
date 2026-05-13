@@ -844,6 +844,7 @@ export function updatePlayerBackground() {
   const bgLayer = document.querySelector('#modern-music-player .player-bg-layer');
   const track = musicPlayerState.playlist?.[musicPlayerState.currentIndex];
   const requestId = ++__playerBackgroundRequestId;
+  if (!bgLayer) return;
 
   const applyLayerStyles = (imageCss) => {
     if (!bgLayer || requestId !== __playerBackgroundRequestId) return;

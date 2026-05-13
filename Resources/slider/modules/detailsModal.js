@@ -1625,73 +1625,75 @@ async function startHeroTrailer(root, item, { signal } = {}) {
   const heroImg = hero.querySelector("img");
   const showImg = (on) => { try { if (heroImg) heroImg.style.opacity = on ? "1" : "0"; } catch {} };
 
-  try {
-    const locals = await fetchLocalTrailers(item.Id, { signal });
-    if (signal?.aborted) return;
-    const best = pickBestLocalTrailer(locals);
-    if (best?.Id) {
-      const url = await getVideoStreamUrl(
-        best.Id,
-        1280,
-        0,
-        null,
-        ["h264"],
-        ["aac"],
-        false,
-        false,
-        false,
-        { signal }
-      );
+  if (!item?.__jmsVirtualTrailer && safeText(item?.Id)) {
+    try {
+      const locals = await fetchLocalTrailers(item.Id, { signal });
       if (signal?.aborted) return;
-      if (url) {
-        const v = document.createElement("video");
-        v.dataset.jmsHeroPreview = "1";
-        v.autoplay = true;
-        v.muted = false;
-        v.playsInline = true;
-        v.loop = false;
+      const best = pickBestLocalTrailer(locals);
+      if (best?.Id) {
+        const url = await getVideoStreamUrl(
+          best.Id,
+          1280,
+          0,
+          null,
+          ["h264"],
+          ["aac"],
+          false,
+          false,
+          false,
+          { signal }
+        );
+        if (signal?.aborted) return;
+        if (url) {
+          const v = document.createElement("video");
+          v.dataset.jmsHeroPreview = "1";
+          v.autoplay = true;
+          v.muted = false;
+          v.playsInline = true;
+          v.loop = false;
 
-        v.controls = true;
-        v.preload = "metadata";
-        v.src = url;
+          v.controls = true;
+          v.preload = "metadata";
+          v.src = url;
 
-        Object.assign(v.style, {
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          display: "block",
-        });
+          Object.assign(v.style, {
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
+          });
 
-        showImg(true);
-        try { if (replayBtn) replayBtn.disabled = false; } catch {}
-
-        const backToBackdrop = () => {
-          if (signal?.aborted) return;
-          try { v.pause(); } catch {}
-          try { v.removeAttribute("src"); v.load(); } catch {}
-          try { v.remove(); } catch {}
-          try { media.innerHTML = ""; } catch {}
           showImg(true);
           try { if (replayBtn) replayBtn.disabled = false; } catch {}
-          setHeroReplayVisible(replayBtn, true);
-        };
 
-        v.addEventListener("playing", () => {
-          if (signal?.aborted) return;
-          showImg(false);
-        }, { once: true });
+          const backToBackdrop = () => {
+            if (signal?.aborted) return;
+            try { v.pause(); } catch {}
+            try { v.removeAttribute("src"); v.load(); } catch {}
+            try { v.remove(); } catch {}
+            try { media.innerHTML = ""; } catch {}
+            showImg(true);
+            try { if (replayBtn) replayBtn.disabled = false; } catch {}
+            setHeroReplayVisible(replayBtn, true);
+          };
 
-        v.addEventListener("ended", backToBackdrop, { once: true });
-        v.addEventListener("error", backToBackdrop, { once: true });
+          v.addEventListener("playing", () => {
+            if (signal?.aborted) return;
+            showImg(false);
+          }, { once: true });
 
-        media.appendChild(v);
+          v.addEventListener("ended", backToBackdrop, { once: true });
+          v.addEventListener("error", backToBackdrop, { once: true });
 
-        try { await v.play(); } catch {}
-        return;
+          media.appendChild(v);
+
+          try { await v.play(); } catch {}
+          return;
+        }
       }
+    } catch (e) {
+      if (!signal?.aborted) console.warn("startHeroTrailer local error:", e);
     }
-  } catch (e) {
-    if (!signal?.aborted) console.warn("startHeroTrailer local error:", e);
   }
 
   try {
@@ -2013,6 +2015,7 @@ function localizeItemType(rawType) {
     Series: ll.dizi,
     Episode: ll.episode,
     Season: ll.season,
+    Trailer: ll.trailer,
     BoxSet: ll.boxset || ll.collectionTitle || ll.collection,
     MusicAlbum: ll.album,
     Audio: ll.track,
@@ -2031,6 +2034,42 @@ function safeText(s, fallback = "") {
 
 function label(key, fallback = "") {
   return safeText(labels?.[key] || config?.languageLabels?.[key], fallback);
+}
+
+function getExternalDetailsHrefFromItem(item) {
+  return safeText(
+    item?.__detailsHref ||
+    item?.__tmdbPageUrl ||
+    ""
+  );
+}
+
+function getExternalArtworkUrl(item, type = "poster") {
+  if (!item || typeof item !== "object") return "";
+  if (type === "backdrop") {
+    return safeText(item?.__backdropExternalUrl || item?.backdropUrl || item?.__posterExternalUrl || item?.posterUrl);
+  }
+  if (type === "logo") {
+    return safeText(item?.__logoExternalUrl || item?.logoUrl);
+  }
+  return safeText(item?.__posterExternalUrl || item?.posterUrl);
+}
+
+function openExternalLink(url) {
+  const href = safeText(url);
+  if (!href) return false;
+
+  try {
+    const popup = window.open(href, "_blank", "noopener,noreferrer");
+    if (popup) return true;
+  } catch {}
+
+  try {
+    window.location.href = href;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function copyTextToClipboard(value) {
@@ -2621,6 +2660,8 @@ function getPrimaryImageUrlMini(it) {
 
 function getHeroPrimaryImageUrl(it, { maxWidth = 1280 } = {}) {
   try {
+    const external = getExternalArtworkUrl(it, "poster");
+    if (external) return external;
     if (!it?.Id) return "";
 
     const primaryTag = it?.ImageTags?.Primary || it?.PrimaryImageTag;
@@ -3521,8 +3562,9 @@ function startRecoLoad(root, movieItem, { signal } = {}) {
   })();
 }
 
-export async function openDetailsModal({ itemId, serverId = "", preferBackdropIndex = "0", perPage = 6, originEl } = {}) {
-  if (!itemId) return;
+export async function openDetailsModal({ itemId, item: preloadedItem = null, detailsHref = "", serverId = "", preferBackdropIndex = "0", perPage = 6, originEl } = {}) {
+  const resolvedItemId = safeText(itemId || preloadedItem?.Id);
+  if (!resolvedItemId && !preloadedItem) return;
   const detailsRuntime = getDetailsModalRuntimeConfig();
   const _originResolved = __resolveOriginEl(originEl || document.activeElement);
   const _nextOrigin = { el: _originResolved, rect: __getRectSafe(_originResolved) };
@@ -3550,12 +3592,17 @@ export async function openDetailsModal({ itemId, serverId = "", preferBackdropIn
 
   setTimeout(() => { if (_open) focusFirst(root); }, 50);
 
-  let item = null;
-  try {
-    item = await fetchItemDetailsFull(itemId, { signal: _abort.signal });
-  } catch (e) {
-    if (_abort.signal.aborted) return;
-    console.warn("openDetailsModal: fetchItemDetailsFull error:", e);
+  let item = preloadedItem && preloadedItem.__jmsVirtualTrailer === true
+    ? preloadedItem
+    : null;
+  if (!item && resolvedItemId) {
+    try {
+      item = await fetchItemDetailsFull(resolvedItemId, { signal: _abort.signal });
+    } catch (e) {
+      if (_abort.signal.aborted) return;
+      console.warn("openDetailsModal: fetchItemDetailsFull error:", e);
+      if (preloadedItem) item = preloadedItem;
+    }
   }
   if (!_open || _abort.signal.aborted) return;
 
@@ -3575,9 +3622,10 @@ export async function openDetailsModal({ itemId, serverId = "", preferBackdropIn
   }
 
   const baseItem = item;
+  const isVirtualTrailer = baseItem?.__jmsVirtualTrailer === true;
   let seriesItem = null;
   const isEpisode = baseItem?.Type === "Episode";
-  if (isEpisode && baseItem?.SeriesId) {
+  if (!isVirtualTrailer && isEpisode && baseItem?.SeriesId) {
     try {
       seriesItem = await fetchItemDetailsFull(baseItem.SeriesId, { signal: _abort.signal });
     } catch (e) {
@@ -3615,16 +3663,22 @@ export async function openDetailsModal({ itemId, serverId = "", preferBackdropIn
     (displayItem.ImageTags?.Backdrop?.[btIndex]) ||
     (Array.isArray(displayItem.BackdropImageTags) ? displayItem.BackdropImageTags[Number(btIndex)] : "") ||
     "";
-  const backdropUrl = btTag
+  const backdropUrl = !isVirtualTrailer && btTag
     ? withServer(`/Items/${encodeURIComponent(displayItem.Id)}/Images/Backdrop/${encodeURIComponent(btIndex)}?tag=${encodeURIComponent(btTag)}&quality=90&maxWidth=1920`)
     : "";
+  const externalBackdropUrl =
+    getExternalArtworkUrl(displayItem, "backdrop") ||
+    getExternalArtworkUrl(baseItem, "backdrop");
   const heroPrimaryUrl =
     getHeroPrimaryImageUrl(displayItem, { maxWidth: 1400 }) ||
     getHeroPrimaryImageUrl(baseItem, { maxWidth: 1400 }) ||
     "";
-  const heroImageUrl = backdropUrl || heroPrimaryUrl;
+  const heroImageUrl = backdropUrl || externalBackdropUrl || heroPrimaryUrl;
 
-  const detailsHref = getDetailsUrl(baseItem.Id);
+  const detailsHrefResolved =
+    safeText(detailsHref) ||
+    getExternalDetailsHrefFromItem(baseItem) ||
+    (!isVirtualTrailer ? getDetailsUrl(baseItem.Id) : "");
   const isSeries = baseItem.Type === "Series";
   const seriesId = isSeries
     ? baseItem.Id
@@ -3634,14 +3688,17 @@ export async function openDetailsModal({ itemId, serverId = "", preferBackdropIn
 
   const episodeSeasonId = isEpisode ? (baseItem.SeasonId || baseItem.ParentId || null) : null;
   const isMovie = baseItem.Type === "Movie";
+  const isTrailerItem = isVirtualTrailer || baseItem.Type === "Trailer";
   const isBoxSet = baseItem.Type === "BoxSet";
   const isMusicAlbum = baseItem.Type === "MusicAlbum";
   const isAudio = baseItem.Type === "Audio";
   const isMusicType = isMusicAlbum || isAudio;
   const supportsLocalComments =
+    !isVirtualTrailer &&
     detailsRuntime.showLocalComments &&
     !!safeText(baseItem?.Id || displayItem?.Id, "");
   const supportsTmdbReviews =
+    !isVirtualTrailer &&
     detailsRuntime.showTmdbReviews &&
     (
       baseItem.Type === "Movie" ||
@@ -3663,7 +3720,7 @@ export async function openDetailsModal({ itemId, serverId = "", preferBackdropIn
     seasons = await fetchSeasonsForSeries(seriesId, { signal: _abort.signal });
     if (!_open || _abort.signal.aborted) return;
     selectedSeasonId = seasons[0]?.Id || null;
-  } else if (item.Type === "Season" && seriesId) {
+  } else if (baseItem.Type === "Season" && seriesId) {
     seasons = await fetchSeasonsForSeries(seriesId, { signal: _abort.signal });
     if (!_open || _abort.signal.aborted) return;
   }
@@ -3695,6 +3752,11 @@ export async function openDetailsModal({ itemId, serverId = "", preferBackdropIn
   const remaining = runtimeTicks > playbackTicks ? fmtRuntime(runtimeTicks - playbackTicks) : "";
   const finishTime = playbackTicks > 0 ? formatFinishTime(runtimeTicks, playbackTicks) : "";
   const communityRatingText = formatCommunityRating(displayItem?.CommunityRating || baseItem?.CommunityRating);
+  const trailerReleaseState = safeText(baseItem?.__tmdbReleaseLabel || displayItem?.__tmdbReleaseLabel);
+  const trailerReleaseValue = safeText(baseItem?.__tmdbReleaseDateLabel || displayItem?.__tmdbReleaseDateLabel || displayItem?.PremiereDate || baseItem?.PremiereDate);
+  const trailerSourceValue = safeText(baseItem?.__trailerSourceLabel || displayItem?.__trailerSourceLabel, "TMDb / YouTube");
+  const trailerExternalUrl = safeText(baseItem?.__youtubeWatchUrl || displayItem?.__youtubeWatchUrl || baseItem?.RemoteTrailers?.[0]?.Url || displayItem?.RemoteTrailers?.[0]?.Url);
+  const trailerPosterUrl = getExternalArtworkUrl(baseItem, "poster") || getExternalArtworkUrl(displayItem, "poster");
   const studioEntries = getStudioEntries(studioSource);
   const studioNames = studioEntries.map((studio) => studio.name);
   const primaryStudioEntry = studioEntries[0] || null;
@@ -3725,13 +3787,18 @@ export async function openDetailsModal({ itemId, serverId = "", preferBackdropIn
     }
     return parts.join(" • ");
   })();
-  const subtitleLine = [year, runtime].filter(Boolean).join(" • ");
-  const infoLine = [
-    seasonEpisodeText,
-    isMusicType ? albumArtist : "",
-    isMusicType ? albumName : ""
-  ].filter(Boolean).join(" • ");
+  const subtitleLine = isTrailerItem
+    ? [year, trailerReleaseState].filter(Boolean).join(" • ")
+    : [year, runtime].filter(Boolean).join(" • ");
+  const infoLine = isTrailerItem
+    ? [trailerReleaseValue].filter(Boolean).join(" • ")
+    : [
+        seasonEpisodeText,
+        isMusicType ? albumArtist : "",
+        isMusicType ? albumName : ""
+      ].filter(Boolean).join(" • ");
   const previewChips = [
+    isTrailerItem && trailerReleaseState ? { text: trailerReleaseState, accent: true } : null,
     communityRatingText ? { text: communityRatingText } : null,
     rating ? { text: rating, accent: true } : null,
     videoQuality ? { text: videoQuality.split(" • ").slice(0, 2).join(" • ") } : null,
@@ -3741,22 +3808,29 @@ export async function openDetailsModal({ itemId, serverId = "", preferBackdropIn
       studioName: primaryStudioEntry.name
     } : null
   ].filter((chip) => safeText(chip?.text)).slice(0, 4);
-  const stats = [
-    { label: label("sure", "Süre"), value: runtime },
-    { label: label("watchlistPreviewRemaining", "Kalan"), value: remaining },
-    { label: label("watchlistPreviewFinishAt", "Bitiş"), value: finishTime },
-    { label: label("watchlistPreviewVideoQuality", "Video"), value: videoQuality || safeText(baseItem?.MediaType || displayItem?.MediaType) },
-    { label: label("yonetmen", "Yönetmen"), value: directors.join(", ") },
-    { label: label("watchlistPreviewStudio", "Stüdyo"), value: studioNames.join(", ") || albumArtist || albumName }
-  ].filter((entry) => safeText(entry?.value));
-  const mediaFields = isBoxSet
+  const stats = (isTrailerItem
+    ? [
+        { label: label("trailerReleaseLabel", "Vizyon"), value: trailerReleaseValue || trailerReleaseState },
+        { label: label("trailerSourceLabel", "Kaynak"), value: trailerSourceValue },
+        { label: label("communityRating", "TMDb"), value: community ? `TMDb ${community}` : "" }
+      ]
+    : [
+        { label: label("sure", "Süre"), value: runtime },
+        { label: label("watchlistPreviewRemaining", "Kalan"), value: remaining },
+        { label: label("watchlistPreviewFinishAt", "Bitiş"), value: finishTime },
+        { label: label("watchlistPreviewVideoQuality", "Video"), value: videoQuality || safeText(baseItem?.MediaType || displayItem?.MediaType) },
+        { label: label("yonetmen", "Yönetmen"), value: directors.join(", ") },
+        { label: label("watchlistPreviewStudio", "Stüdyo"), value: studioNames.join(", ") || albumArtist || albumName }
+      ]
+  ).filter((entry) => safeText(entry?.value));
+  const mediaFields = isBoxSet || isTrailerItem
     ? []
     : [
         { label: label("watchlistPreviewVideoTrack", "Video"), value: videoQuality },
         { label: label("watchlistPreviewAudioCount", "Ses"), value: audioTracks.length ? `${audioTracks.length} ${label("watchlistPreviewTrackSuffix", "parça")}` : "" },
         { label: label("watchlistPreviewSubtitleCount", "Altyazı"), value: subtitleTracks.length ? `${subtitleTracks.length} ${label("watchlistPreviewTrackSuffix", "parça")}` : "" }
       ];
-  const creditFields = isBoxSet
+  const creditFields = isBoxSet || isTrailerItem
     ? []
     : [
         { label: label("yonetmen", "Yönetmen"), value: directors.join(", ") },
@@ -3766,6 +3840,11 @@ export async function openDetailsModal({ itemId, serverId = "", preferBackdropIn
         { label: label("watchlistPreviewAlbum", "Albüm"), value: albumName },
         { label: label("watchlistPreviewAlbumArtist", "Albüm Sanatçısı"), value: albumArtist }
       ];
+  const trailerInfoFields = [
+    { label: label("trailerReleaseLabel", "Vizyon"), value: trailerReleaseValue || trailerReleaseState },
+    { label: label("trailerSourceLabel", "Kaynak"), value: trailerSourceValue },
+    { label: label("communityRating", "TMDb"), value: community ? `TMDb ${community}` : "" }
+  ].filter((entry) => safeText(entry?.value));
 
   let episodes = [];
   if (seriesId) {
@@ -3845,6 +3924,39 @@ wireMiniCardDelegation();
   }
 
   function renderRightPanelHtml() {
+    if (isTrailerItem) {
+      const trailerInfoHtml = trailerInfoFields.length
+        ? `
+          <div class="jmsdm-preview-field-list">
+            ${trailerInfoFields.map((field) => `
+              <div class="jmsdm-preview-field">
+                <div class="jmsdm-preview-field-label">${escapeHtml(field.label)}</div>
+                <div class="jmsdm-preview-field-value">${escapeHtml(field.value)}</div>
+              </div>
+            `).join("")}
+          </div>
+        `
+        : "";
+
+      return `
+        <div class="jmsdm-section-title">${label("trailerPreviewInfoTitle", "Fragman Bilgileri")}</div>
+        <div class="jmsdm-epwrap">
+          ${trailerPosterUrl ? `
+            <div style="display:flex;justify-content:center;margin-bottom:14px;">
+              <img
+                src="${escapeHtml(trailerPosterUrl)}"
+                alt="${escapeHtml(name)}"
+                loading="lazy"
+                decoding="async"
+                style="width:min(100%,220px);aspect-ratio:2/3;object-fit:cover;border-radius:16px;border:1px solid rgba(255,255,255,.12);box-shadow:0 18px 36px rgba(0,0,0,.28);background:rgba(255,255,255,.05);">
+            </div>
+          ` : ""}
+          ${trailerInfoHtml}
+          ${renderPreviewTagSection(label("genre", "Tür"), genres)}
+        </div>
+      `;
+    }
+
     if (isMovie) {
       const similarTitle = safeText(recos.title, config.languageLabels.similarItems || "Benzer İçerikler");
 
@@ -3974,6 +4086,36 @@ wireMiniCardDelegation();
     `;
   }
 
+  const actionButtonsHtml = isTrailerItem
+    ? `
+      <button class="jmsdm-btn primary jmsdm-play">
+        ${icon("M8 5v14l11-7z")} ${label("playTrailerNowLabel", "Fragmanı Oynat")}
+      </button>
+      <button type="button" class="jmsdm-btn jmsdm-openpage">
+        ${icon("M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3z")} ${label("openTmdbPageLabel", "TMDb Sayfası")}
+      </button>
+      ${trailerExternalUrl ? `
+        <button type="button" class="jmsdm-btn jmsdm-external">
+          ${icon("M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3z")} ${label("openYoutubeLabel", "YouTube'da Aç")}
+        </button>
+      ` : ""}
+    `
+    : `
+      <button class="jmsdm-btn primary jmsdm-play">
+        ${icon("M8 5v14l11-7z")} ${config.languageLabels.playNowLabel || "Şimdi Oynat"}
+      </button>
+      <button type="button" class="jmsdm-btn jmsdm-openpage">
+        ${icon("M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3z")} ${config.languageLabels.goToPageLabel || "Sayfaya Git"}
+      </button>
+      <button class="jmsdm-btn jmsdm-fav" aria-pressed="${isFavorite ? "true" : "false"}">
+        ${icon(isFavorite ? "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" : "M12.1 18.55l-.1.1-.11-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5 18.5 5 20 6.5 20 8.5c0 2.89-3.14 5.74-7.9 10.05z")}
+        ${getWatchlistButtonText(baseItem, isFavorite)}
+      </button>
+      <button class="jmsdm-btn jmsdm-watchlist-open">
+        ${icon("M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z")} ${config.languageLabels.watchlistOpen || "İzleme Listesi"}
+      </button>
+    `;
+
   root.innerHTML = `
     <div class="jmsdm-backdrop" role="dialog" aria-modal="true" aria-label="${name}">
       <div class="jmsdm-card" tabindex="-1">
@@ -4006,19 +4148,7 @@ wireMiniCardDelegation();
 
                 <div class="jmsdm-preview-body">
                   <div class="jmsdm-actions">
-                    <button class="jmsdm-btn primary jmsdm-play">
-                      ${icon("M8 5v14l11-7z")} ${config.languageLabels.playNowLabel || "Şimdi Oynat"}
-                    </button>
-                    <button class="jmsdm-btn jmsdm-openpage">
-                      ${icon("M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3z")} ${config.languageLabels.goToPageLabel || "Sayfaya Git"}
-                    </button>
-                    <button class="jmsdm-btn jmsdm-fav" aria-pressed="${isFavorite ? "true" : "false"}">
-                      ${icon(isFavorite ? "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" : "M12.1 18.55l-.1.1-.11-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5 18.5 5 20 6.5 20 8.5c0 2.89-3.14 5.74-7.9 10.05z")}
-                      ${getWatchlistButtonText(baseItem, isFavorite)}
-                    </button>
-                    <button class="jmsdm-btn jmsdm-watchlist-open">
-                      ${icon("M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z")} ${config.languageLabels.watchlistOpen || "İzleme Listesi"}
-                    </button>
+                    ${actionButtonsHtml}
                   </div>
 
                   <div class="jmsdm-overview">${overview}</div>
@@ -4068,24 +4198,27 @@ wireMiniCardDelegation();
   }
 
   const playBtn = root.querySelector(".jmsdm-play");
-  const initialResumeTicks = getResumeTicksFromItem(baseItem);
-  setPlayButtonLabel(playBtn, initialResumeTicks > 0);
-
-  if (
-    initialResumeTicks <= 0 &&
-    (baseItem?.Type === "Series" || baseItem?.Type === "Season")
-  ) {
-    getResumeTicksForContainer(baseItem.Id, { signal: _abort.signal })
-      .then((t) => {
-        if (!_open || _abort.signal.aborted) return;
-        setPlayButtonLabel(playBtn, t > 0);
-      })
-      .catch(() => {});
-  }
-
   const openBtn = root.querySelector(".jmsdm-openpage");
+  const externalBtn = root.querySelector(".jmsdm-external");
   const favBtn  = root.querySelector(".jmsdm-fav");
   const watchlistBtn = root.querySelector(".jmsdm-watchlist-open");
+  const initialResumeTicks = isTrailerItem ? 0 : getResumeTicksFromItem(baseItem);
+
+  if (!isTrailerItem) {
+    setPlayButtonLabel(playBtn, initialResumeTicks > 0);
+
+    if (
+      initialResumeTicks <= 0 &&
+      (baseItem?.Type === "Series" || baseItem?.Type === "Season")
+    ) {
+      getResumeTicksForContainer(baseItem.Id, { signal: _abort.signal })
+        .then((t) => {
+          if (!_open || _abort.signal.aborted) return;
+          setPlayButtonLabel(playBtn, t > 0);
+        })
+        .catch(() => {});
+    }
+  }
 
   const updateFavUi = () => {
     if (!favBtn) return;
@@ -4104,6 +4237,11 @@ wireMiniCardDelegation();
     e.stopPropagation();
     try {
       playBtn.disabled = true;
+      if (isTrailerItem) {
+        stopHeroMedia(root);
+        await startHeroTrailer(root, displayItem, { signal: _abort.signal });
+        return;
+      }
       const started = await playNow(baseItem.Id);
       if (!started) return;
       await closeDetailsModal();
@@ -4119,16 +4257,40 @@ wireMiniCardDelegation();
   const openHandler = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    e.stopImmediatePropagation?.();
+    if (isTrailerItem) {
+      const url = String(detailsHrefResolved || "").trim();
+      if (!url) return;
+
+      try {
+        window.open(url, "_blank", "noopener,noreferrer");
+      } catch {}
+      return;
+    }
     try {
-      window.location.hash = String(detailsHref || "").replace(/^#/, "");
+      window.location.hash = String(detailsHrefResolved || "").replace(/^#/, "");
       closeDetailsModal();
     } catch {
-      window.location.href = detailsHref;
+      window.location.href = detailsHrefResolved;
     }
   };
 
   addEventListener(playBtn, "click", playHandler);
   addEventListener(openBtn, "click", openHandler);
+  if (externalBtn) {
+    addEventListener(externalBtn, "click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation?.();
+
+      const url = String(trailerExternalUrl || "").trim();
+      if (!url) return;
+
+      try {
+        window.open(url, "_blank", "noopener,noreferrer");
+      } catch {}
+    });
+  }
   if (watchlistBtn) {
     addEventListener(watchlistBtn, "click", async (e) => {
       e.preventDefault();

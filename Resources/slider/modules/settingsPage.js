@@ -19,6 +19,7 @@ import { createNotificationsPanel } from './settings/notificationsPage.js';
 import { createStudioHubsPanel } from './settings/studioHubsPage.js';
 import { createHoverTrailerPanel } from './settings/hoverTrailerPage.js';
 import { createTrailersPanel } from './settings/trailersPage.js';
+import { createCinemaPreRollPanel } from './settings/cinemaPreRollPage.js';
 import { createProfileChooserPanel } from './settings/profileChooserPage.js';
 import { createWatchlistPanel } from './settings/watchlistPage.js';
 import { createParentalPinPanel } from './settings/parentalPinPage.js';
@@ -152,6 +153,7 @@ export function createSettingsModal() {
     const pauseTab = createTab('pause', 'fa-pause', labels.pauseSettings || 'Duraklatma Ekranı Ayarları');
     const watchlistSettingsTab = createTab('watchlist-settings', 'fa-bookmark', labels.watchlistSettingsTab || 'İzleme Listesi Ayarları');
     const hoverTab = createTab('hover', 'fa-play-circle', labels.hoverTrailer || 'HoverTrailer Ayarları');
+    const cinemaPreRollTab = createTab('cinema-preroll', 'fa-clapperboard', labels.cinemaPreRollTab || 'Sinema Ön Gösterimleri');
     const trailersTab = createTab('trailers', 'fa-video', labels.trailersHeader || 'Fragman İndirme / NFO Ayarları');
     const notificationsTab = createTab('notifications', 'fa-bell', labels.notificationsSettings || 'Bildirim Ayarları');
     const detailsModalTab = createTab('details-modal', 'fa-circle-info', labels.detailsModalSettingsTab || 'Detaylar Modülü Ayarları');
@@ -166,7 +168,7 @@ export function createSettingsModal() {
 
     const tabs = [
         mainTab, sliderTab, queryTab, musicTab, studioTab, profileChooserTab,
-        pauseTab, watchlistSettingsTab, hoverTab, trailersTab, notificationsTab, detailsModalTab,
+        pauseTab, watchlistSettingsTab, hoverTab, cinemaPreRollTab, trailersTab, notificationsTab, detailsModalTab,
         avatarTab, parentalPinTab, positionTab, dbManagementTab, exporterTab, aboutTab
     ].filter(Boolean);
     tabContainer.append(...tabs);
@@ -179,6 +181,7 @@ export function createSettingsModal() {
     const positionPanel = createPositionPanel(config, labels);
     const queryPanel = createQueryPanel(config, labels);
     const hoverPanel = createHoverTrailerPanel(config, labels);
+    const cinemaPreRollPanel = createCinemaPreRollPanel(config, labels);
     const trailersPanel = createTrailersPanel(config, labels);
     const studioPanel = createStudioHubsPanel(config, labels);
     const avatarPanel = createAvatarPanel(config, labels);
@@ -229,7 +232,7 @@ export function createSettingsModal() {
 
     [
         mainPanel, sliderPanel, queryPanel, musicPanel, studioPanel, profileChooserPanel,
-        pausePanel, watchlistSettingsPanel, hoverPanel, trailersPanel, notificationsPanel, detailsModalPanel,
+        pausePanel, watchlistSettingsPanel, hoverPanel, cinemaPreRollPanel, trailersPanel, notificationsPanel, detailsModalPanel,
         avatarPanel, parentalPinPanel, positionPanel, dbManagementPanel, exporterPanel, aboutPanel
     ].filter(Boolean).forEach(panel => {
         panel.style.display = 'none';
@@ -238,14 +241,14 @@ export function createSettingsModal() {
 
     const panels = [
         mainPanel, sliderPanel, queryPanel, musicPanel, studioPanel, profileChooserPanel,
-        pausePanel, watchlistSettingsPanel, hoverPanel, trailersPanel, notificationsPanel, detailsModalPanel,
+        pausePanel, watchlistSettingsPanel, hoverPanel, cinemaPreRollPanel, trailersPanel, notificationsPanel, detailsModalPanel,
         avatarPanel, parentalPinPanel, positionPanel, dbManagementPanel, exporterPanel, aboutPanel
     ].filter(Boolean);
     tabContent.append(...panels);
 
     const interactiveTabs = [
         mainTab, sliderTab, queryTab, musicTab, studioTab, profileChooserTab,
-        pauseTab, watchlistSettingsTab, hoverTab, trailersTab, notificationsTab, detailsModalTab,
+        pauseTab, watchlistSettingsTab, hoverTab, cinemaPreRollTab, trailersTab, notificationsTab, detailsModalTab,
         avatarTab, parentalPinTab, positionTab, dbManagementTab, exporterTab, aboutTab
     ].filter(Boolean);
     interactiveTabs.forEach(tab => {
@@ -1160,6 +1163,12 @@ function createMainSettingsPanel(labels, panels) {
         'enableParentalPinModule',
         labels.enableParentalPinModule || 'Parental PIN modülünü etkinleştir',
         config.enableParentalPinModule !== false
+    ));
+
+    enablesSection.appendChild(createCheckbox(
+        'enableCinemaPreRollModule',
+        labels.enableCinemaPreRollModule || 'Ön gösterim modülünü etkinleştir',
+        config.enableCinemaPreRollModule !== false
     ));
 
     enablesSection.appendChild(createCheckbox(

@@ -1,4 +1,4 @@
-import { getConfig, getServerAddress, isParentalPinModuleEnabled } from "../../../slider/modules/config.js";
+import { getConfig, getServerAddress, isCinemaPreRollModuleEnabled, isParentalPinModuleEnabled } from "../../../slider/modules/config.js";
 import { clearCredentials, getWebClientHints, getStoredServerBase } from "./auth.js";
 import { withServer, withServerSrcset, invalidateServerBaseCache, resolveServerBase } from "../../../slider/modules/jfUrl.js";
 
@@ -72,6 +72,36 @@ function showPlayNowSuccessNotification(duration = 3000) {
 }
 
 let __parentalPinRuntimePromise = null;
+let __cinemaPreRollRuntimePromise = null;
+
+function isCinemaPreRollRuntimeNeeded(source = null) {
+  const liveConfig = source || (typeof getConfig === "function" ? getConfig() : null) || config || {};
+  return isCinemaPreRollModuleEnabled(liveConfig) && liveConfig?.cinemaPreRollEnabled === true;
+}
+
+function warmCinemaPreRollRuntimeIfEnabled() {
+  try {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const liveConfig = (typeof getConfig === "function" ? getConfig() : null) || config || {};
+    if (!isCinemaPreRollRuntimeNeeded(liveConfig)) {
+      return;
+    }
+
+    if (!__cinemaPreRollRuntimePromise) {
+      __cinemaPreRollRuntimePromise = import("../../../slider/modules/cinemaPreRoll.js");
+    }
+
+    __cinemaPreRollRuntimePromise.catch((error) => {
+      console.warn("CinemaPreRoll runtime preload failed:", error);
+      __cinemaPreRollRuntimePromise = null;
+    });
+  } catch (error) {
+    console.warn("CinemaPreRoll runtime preload error:", error);
+  }
+}
 
 function warmParentalPinRuntimeIfEnabled() {
   try {
@@ -120,6 +150,65 @@ async function maybeEnsureParentalPinBeforePlayback(item, options = {}) {
 }
 
 warmParentalPinRuntimeIfEnabled();
+warmCinemaPreRollRuntimeIfEnabled();
+
+async function maybePlayCinemaPreRollSessionIfEnabled({ item } = {}) {
+  try {
+    const liveConfig = (typeof getConfig === "function" ? getConfig() : null) || config || {};
+    if (!isCinemaPreRollRuntimeNeeded(liveConfig)) {
+      return {
+        played: false,
+        reason: "disabled",
+        config: {
+          enableCinemaPreRollModule: liveConfig?.enableCinemaPreRollModule !== false,
+          cinemaPreRollEnabled: liveConfig?.cinemaPreRollEnabled === true
+        }
+      };
+    }
+
+    if (!__cinemaPreRollRuntimePromise) {
+      __cinemaPreRollRuntimePromise = import("../../../slider/modules/cinemaPreRoll.js");
+    }
+
+    const mod = await __cinemaPreRollRuntimePromise;
+    if (typeof mod?.maybePlayCinemaPreRollSession !== "function") {
+      return { played: false, reason: "unavailable" };
+    }
+
+    return await mod.maybePlayCinemaPreRollSession({ item });
+  } catch (error) {
+    console.warn("[JMSFusion] Cinema pre-roll runtime yuklenemedi:", error);
+    __cinemaPreRollRuntimePromise = null;
+    return {
+      played: false,
+      reason: "load-error",
+      error: String(error?.message || error || "")
+    };
+  }
+}
+
+async function armCinemaPreRollNativePlaybackBypassIfEnabled({ itemId = "", itemIds = [], delayMs = 45_000 } = {}) {
+  try {
+    const liveConfig = (typeof getConfig === "function" ? getConfig() : null) || config || {};
+    if (!isCinemaPreRollRuntimeNeeded(liveConfig)) {
+      return false;
+    }
+
+    if (!__cinemaPreRollRuntimePromise) {
+      __cinemaPreRollRuntimePromise = import("../../../slider/modules/cinemaPreRoll.js");
+    }
+
+    const mod = await __cinemaPreRollRuntimePromise;
+    if (typeof mod?.armCinemaPreRollNativePlaybackBypass !== "function") {
+      return false;
+    }
+
+    return !!mod.armCinemaPreRollNativePlaybackBypass({ itemId, itemIds, delayMs });
+  } catch (error) {
+    console.warn("[JMSFusion] Cinema pre-roll native bypass kurulamadı:", error);
+    return false;
+  }
+}
 
 async function __getGmmp() {
   try {
@@ -158,6 +247,46 @@ async function __destroyGmmpBeforeVideoPlayNow() {
     console.warn("playNow(video): GMMP kapatilamadi", err);
     return false;
   }
+}
+
+async function startResolvedVideoPlayback({ itemId, item, requesterUserId, persistDebug }) {
+  const normalizedItemId = String(itemId || "");
+  const resumeTicks = Math.max(0, Math.floor(Number(item?.UserData?.PlaybackPositionTicks) || 0));
+
+  const localKick = await tryLocalPlaybackStart(normalizedItemId, {
+    startPositionTicks: resumeTicks,
+    item
+  }).catch(() => ({ tried: false, started: false, attempts: [] }));
+
+  if (localKick?.started) {
+    window.currentPlayingItemId = itemId;
+    setLastPlayNowBlockReason("");
+    persistDebug({
+      at: Date.now(),
+      stage: "success",
+      itemId,
+      requesterUserId,
+      method: "local-direct"
+    });
+    showPlayNowSuccessNotification();
+    return true;
+  }
+
+  persistDebug({
+    at: Date.now(),
+    stage: "local-failed",
+    itemId,
+    requesterUserId,
+    localTried: !!localKick?.tried,
+    localAttempts: Array.isArray(localKick?.attempts)
+      ? localKick.attempts.slice(0, 8)
+      : []
+  });
+
+  if (localKick?.tried) {
+    throw new Error("Yerel oynatıcı başlatılamadı. Sayfayı yenileyip tekrar deneyin.");
+  }
+  throw new Error("Yerel oynatıcı bulunamadı. Sayfayı yenileyip tekrar deneyin.");
 }
 
 let __lastAuthSnapshot = null;
@@ -671,21 +800,22 @@ function isCompletedUserData(userData = {}) {
   return Number.isFinite(playedPercentage) && playedPercentage >= 100;
 }
 
+function buildPlayedUserDataSnapshot(played) {
+  return {
+    Played: played === true,
+    PlayedPercentage: played === true ? 100 : 0,
+    PlaybackPositionTicks: 0,
+    LastPlayedDate: new Date().toISOString(),
+  };
+}
+
 function applyLocalPlayedSnapshot(itemId, played) {
   const id = String(itemId || "").trim();
-  if (!id || !itemCache.has(id)) return;
+  const nextUserData = buildPlayedUserDataSnapshot(played);
+  if (!id || !itemCache.has(id)) return nextUserData;
 
   const cached = itemCache.get(id);
-  if (!cached || !cached.data || typeof cached.data !== "object") return;
-
-  const nextUserData = {
-    ...(cached.data.UserData && typeof cached.data.UserData === "object" ? cached.data.UserData : {})
-  };
-
-  nextUserData.Played = played === true;
-  nextUserData.PlayedPercentage = played === true ? 100 : 0;
-  nextUserData.PlaybackPositionTicks = 0;
-  nextUserData.LastPlayedDate = new Date().toISOString();
+  if (!cached || !cached.data || typeof cached.data !== "object") return nextUserData;
 
   itemCache.set(id, {
     ...cached,
@@ -695,18 +825,24 @@ function applyLocalPlayedSnapshot(itemId, played) {
       UserData: nextUserData
     }
   });
+
+  return nextUserData;
 }
 
-async function invalidatePersistentSliderCaches(itemId, { clearQueries = false } = {}) {
+async function patchPersistentSliderCaches(itemId, userDataPatch = {}, options = {}) {
   const id = String(itemId || "").trim();
   if (!id) return;
 
   try {
     const cacheModule = await import("../../../slider/modules/sliderCache.js");
-    await cacheModule?.cacheDeleteItem?.(id);
-    if (clearQueries) {
-      await cacheModule?.cacheClearQueries?.();
-    }
+    const itemData =
+      options?.itemData ||
+      itemCache.get(id)?.data ||
+      null;
+    await cacheModule?.cachePatchItemUserData?.(id, userDataPatch, {
+      itemData,
+      queryFreshTtlMs: Math.max(60_000, Number(options?.queryFreshTtlMs) || 0),
+    });
   } catch {}
 }
 
@@ -1683,11 +1819,15 @@ export async function updatePlayedStatus(itemId, played) {
   });
 
   try {
-    applyLocalPlayedSnapshot(itemId, played);
-    await invalidatePersistentSliderCaches(itemId, { clearQueries: true });
+    const nextUserData = applyLocalPlayedSnapshot(itemId, played);
+    await patchPersistentSliderCaches(itemId, nextUserData, {
+      queryFreshTtlMs: 5 * 60 * 1000,
+    });
     dispatchUserDataChanged({
       itemId: String(itemId || "").trim(),
-      played: played === true
+      played: played === true,
+      userData: nextUserData,
+      skipSliderRefresh: true,
     });
   } catch {}
 
@@ -2395,44 +2535,25 @@ export async function playNow(itemId) {
       return false;
     }
 
-    const resumeTicks = Math.max(0, Math.floor(Number(item?.UserData?.PlaybackPositionTicks) || 0));
-
     await __destroyGmmpBeforeVideoPlayNow().catch(() => false);
-
-    const localKick = await tryLocalPlaybackStart(normalizedItemId, {
-      startPositionTicks: resumeTicks,
-      item
-    }).catch(() => ({ tried: false, started: false, attempts: [] }));
-
-    if (localKick?.started) {
-      window.currentPlayingItemId = itemId;
-      setLastPlayNowBlockReason("");
-      persistDebug({
-        at: Date.now(),
-        stage: "success",
-        itemId,
-        requesterUserId,
-        method: "local-direct"
-      });
-      showPlayNowSuccessNotification();
-      return true;
-    }
-
-    persistDebug({
-      at: Date.now(),
-      stage: "local-failed",
-      itemId,
-      requesterUserId,
-      localTried: !!localKick?.tried,
-      localAttempts: Array.isArray(localKick?.attempts)
-        ? localKick.attempts.slice(0, 8)
-        : []
+    const cinemaPreRollResult = await maybePlayCinemaPreRollSessionIfEnabled({ item }).catch((error) => {
+      console.warn("[JMSFusion] Cinema pre-roll oynatimi atlandi:", error);
+      return { played: false, reason: "error" };
     });
-
-    if (localKick?.tried) {
-      throw new Error("Yerel oynatıcı başlatılamadı. Sayfayı yenileyip tekrar deneyin.");
+    if (cinemaPreRollResult?.played === true) {
+      await armCinemaPreRollNativePlaybackBypassIfEnabled({
+        itemId: normalizedItemId,
+        itemIds: [item?.Id],
+        delayMs: 45_000
+      });
     }
-    throw new Error("Yerel oynatıcı bulunamadı. Sayfayı yenileyip tekrar deneyin.");
+
+    return await startResolvedVideoPlayback({
+      itemId,
+      item,
+      requesterUserId,
+      persistDebug
+    });
   } catch (err) {
     setLastPlayNowBlockReason("");
     console.error("Oynatma hatası:", err);

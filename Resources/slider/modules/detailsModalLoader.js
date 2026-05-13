@@ -45,19 +45,42 @@ function loadDetailsModalModule() {
 }
 
 export async function openDetailsModal(options = {}) {
-  if (!options?.itemId) return null;
+  const resolvedItemId = String(options?.itemId || options?.item?.Id || "").trim();
+  const resolvedDetailsHref = String(
+    options?.detailsHref ||
+    options?.item?.__detailsHref ||
+    options?.item?.__tmdbPageUrl ||
+    ""
+  ).trim();
+  if (!resolvedItemId && !options?.item) {
+    if (resolvedDetailsHref) {
+      navigateToDetailsPage({ ...options, detailsHref: resolvedDetailsHref });
+      return { navigated: true, disabled: false };
+    }
+    return null;
+  }
+
+  const normalizedOptions = resolvedItemId && !options?.itemId
+    ? { ...options, itemId: resolvedItemId }
+    : options;
 
   if (!isDetailsModalModuleEnabled()) {
-    navigateToDetailsPage(options);
+    navigateToDetailsPage({
+      ...normalizedOptions,
+      detailsHref: resolvedDetailsHref
+    });
     return { navigated: true, disabled: true };
   }
 
   try {
     const { openDetailsModal: openDetailsModalInner } = await loadDetailsModalModule();
-    return await openDetailsModalInner(options);
+    return await openDetailsModalInner(normalizedOptions);
   } catch (error) {
     console.warn("detailsModalLoader fallback navigation:", error);
-    navigateToDetailsPage(options);
+    navigateToDetailsPage({
+      ...normalizedOptions,
+      detailsHref: resolvedDetailsHref
+    });
     return { navigated: true, error };
   }
 }

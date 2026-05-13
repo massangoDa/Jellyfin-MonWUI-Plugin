@@ -480,23 +480,124 @@ export async function createActorSlider(People, config, item) {
   }
 
   const sliderWrapper = document.createElement("div");
-  sliderWrapper.className = "monwui-slider-wrapper";
-  applyContainerStyles(sliderWrapper, 'slider');
+  sliderWrapper.className = "monwui-slider-wrapper monwui-artist-menu";
+  if (!config.showActorImg) {
+    sliderWrapper.classList.add("monwui-artist-menu--no-images");
+  }
+
+  const actorToggle = document.createElement("button");
+  actorToggle.type = "button";
+  actorToggle.className = "monwui-artist-toggle";
+  actorToggle.setAttribute("aria-expanded", "false");
+  actorToggle.setAttribute(
+    "aria-label",
+    `${config.languageLabels?.showActorInfo || "Actors"} (${actorsForSlide.length})`
+  );
+  actorToggle.innerHTML = `
+    <i class="fa-solid fa-users"></i>
+    <span class="monwui-artist-count">${actorsForSlide.length}</span>
+  `.trim();
+
+  const actorPanel = document.createElement("div");
+  actorPanel.className = "monwui-artist-popover";
+  const panelIdSeed = `${item?.Id || "unknown"}-${Math.random().toString(36).slice(2, 8)}`;
+  actorPanel.id = `monwui-artist-popover-${panelIdSeed.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  actorPanel.setAttribute("role", "region");
+  actorPanel.setAttribute("aria-label", config.languageLabels?.showActorInfo || "Actors");
+  actorToggle.setAttribute("aria-controls", actorPanel.id);
+
+  const actorPanelBody = document.createElement("div");
+  actorPanelBody.className = "monwui-artist-popover-body";
 
   const actorContainer = document.createElement("div");
   actorContainer.className = "monwui-artist-container";
 
   const leftArrow = document.createElement("button");
+  leftArrow.type = "button";
   leftArrow.className = "monwui-slider-arrow left hidden";
+  leftArrow.setAttribute("aria-label", "Previous actors");
   leftArrow.innerHTML = `<i class="fa-solid fa-chevron-left"></i>`;
 
   const rightArrow = document.createElement("button");
+  rightArrow.type = "button";
   rightArrow.className = "monwui-slider-arrow right hidden";
+  rightArrow.setAttribute("aria-label", "Next actors");
   rightArrow.innerHTML = `<i class="fa-solid fa-chevron-right"></i>`;
 
-  sliderWrapper.appendChild(leftArrow);
-  sliderWrapper.appendChild(actorContainer);
-  sliderWrapper.appendChild(rightArrow);
+  actorPanelBody.appendChild(leftArrow);
+  actorPanelBody.appendChild(actorContainer);
+  actorPanelBody.appendChild(rightArrow);
+  actorPanel.appendChild(actorPanelBody);
+  sliderWrapper.appendChild(actorToggle);
+  sliderWrapper.appendChild(actorPanel);
+
+  let hoverCloseTimer = 0;
+  const clearHoverCloseTimer = () => {
+    if (!hoverCloseTimer) return;
+    clearTimeout(hoverCloseTimer);
+    hoverCloseTimer = 0;
+  };
+  const setExpanded = (expanded) => {
+    actorToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+  };
+  const blurFocusedArrow = () => {
+    const activeElement = document.activeElement;
+    if (
+      activeElement &&
+      sliderWrapper.contains(activeElement) &&
+      activeElement.classList?.contains("monwui-slider-arrow")
+    ) {
+      activeElement.blur();
+    }
+  };
+  [leftArrow, rightArrow].forEach((arrow) => {
+    arrow.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+    });
+    arrow.addEventListener("click", () => {
+      setTimeout(() => {
+        if (!sliderWrapper.matches(":hover")) {
+          arrow.blur();
+          setExpanded(false);
+        }
+      }, 0);
+    });
+  });
+  sliderWrapper.addEventListener("mouseenter", () => {
+    clearHoverCloseTimer();
+    setExpanded(true);
+  });
+  sliderWrapper.addEventListener("mouseleave", () => {
+    if (sliderWrapper.classList.contains("is-open")) return;
+    blurFocusedArrow();
+    clearHoverCloseTimer();
+    hoverCloseTimer = setTimeout(() => {
+      hoverCloseTimer = 0;
+      if (!sliderWrapper.matches(":hover") && !sliderWrapper.matches(":focus-within")) {
+        setExpanded(false);
+      }
+    }, 180);
+  });
+  sliderWrapper.addEventListener("focusin", () => {
+    clearHoverCloseTimer();
+    setExpanded(true);
+  });
+  sliderWrapper.addEventListener("focusout", () => {
+    setTimeout(() => {
+      if (!sliderWrapper.matches(":focus-within")) {
+        sliderWrapper.classList.remove("is-open");
+        setExpanded(false);
+      }
+    }, 0);
+  });
+  actorToggle.addEventListener("click", (event) => {
+    event.preventDefault();
+    clearHoverCloseTimer();
+    const nextOpen = !sliderWrapper.classList.contains("is-open");
+    sliderWrapper.classList.toggle("is-open", nextOpen);
+    setExpanded(nextOpen);
+    if (!nextOpen) actorToggle.blur();
+  });
 
   actorsForSlide.forEach(actor => {
     const actorDiv = document.createElement("div");
@@ -525,19 +626,18 @@ export async function createActorSlider(People, config, item) {
         actorImg.src = "./slider/src/images/nofoto.png";
       };
       actorLink.appendChild(actorImg);
+      actorContent.appendChild(actorLink);
     }
-
-    actorContent.appendChild(actorLink);
-
-    const roleSpan = document.createElement("span");
-    roleSpan.className = "monwui-actor-role";
-    roleSpan.textContent = config.showActorRole ? actor.Role || "" : "";
-    actorContent.appendChild(roleSpan);
 
     const nameSpan = document.createElement("span");
     nameSpan.className = "monwui-actor-name";
     nameSpan.textContent = config.showActorInfo ? actor.Name || "" : "";
     actorContent.appendChild(nameSpan);
+
+    const roleSpan = document.createElement("span");
+    roleSpan.className = "monwui-actor-role";
+    roleSpan.textContent = config.showActorRole ? actor.Role || "" : "";
+    actorContent.appendChild(roleSpan);
 
     actorDiv.appendChild(actorContent);
     actorContainer.appendChild(actorDiv);

@@ -212,15 +212,15 @@ function getDefaultTopByVariant(variant) {
   const mobile = window.matchMedia?.('(max-width: 768px)')?.matches || isMobileDevice();
   if (mobile) {
     switch (variant) {
-      case 'normalslider': baseTop = -7.5; break;
-      case 'peakslider': baseTop = -5.5; break;
-      case 'slider': baseTop = -3; break;
+      case 'normalslider': baseTop = -6.5; break;
+      case 'peakslider': baseTop = -3; break;
+      case 'slider': baseTop = -1.5; break;
       default: baseTop = 0; break;
     }
   } else {
     switch (variant) {
       case 'normalslider': baseTop = -15; break;
-      case 'peakslider': baseTop = -3.5; break;
+      case 'peakslider': baseTop = -2.5; break;
       case 'slider': baseTop = 1; break;
       default: baseTop = 0; break;
     }

@@ -6,12 +6,14 @@ let __globalOverride =
     : null;
 let __globalApplied = false;
 export const SETTINGS_HOTKEY_DEFAULT = "F2";
+const CINEMA_PREROLL_START_FULLSCREEN_DEFAULT = false;
 export const DEFAULT_MANAGED_HOME_SECTION_ORDER = Object.freeze([
   "studioHubs",
   "personalRecommendations",
   "top10SeriesRows",
   "top10MovieRows",
   "tmdbTopMoviesRows",
+  "tmdbTrailerRows",
   "recentRows",
   "continueRows",
   "nextUpRows",
@@ -172,6 +174,7 @@ export function normalizeManagedHomeSectionOrder(value = null, { nativeEntries }
 
   DEFAULT_MANAGED_HOME_SECTION_ORDER.forEach(push);
 
+  ensureImplicitManagedFollowerOrder(out, explicit, "tmdbTopMoviesRows", "tmdbTrailerRows");
   ensureImplicitManagedFollowerOrder(out, explicit, "recentRows", "continueRows");
   ensureImplicitManagedFollowerOrder(out, explicit, "continueRows", "nextUpRows");
 
@@ -202,6 +205,10 @@ function isTop10MovieRowsSectionEnabled(cfg = {}, masterEnabled = cfg?.enableHom
 
 function isTmdbTopMoviesRowsSectionEnabled(cfg = {}, masterEnabled = cfg?.enableHomeSectionsMaster !== false) {
   return masterEnabled && cfg?.enableRecentRows !== false && cfg?.enableTmdbTopMoviesRow !== false;
+}
+
+function isTmdbTrailerRowsSectionEnabled(cfg = {}, masterEnabled = cfg?.enableHomeSectionsMaster !== false) {
+  return masterEnabled && cfg?.enableRecentRows !== false && cfg?.enableTmdbTrailerRows !== false;
 }
 
 function isContinueRowsSectionEnabled(cfg = {}, masterEnabled = cfg?.enableHomeSectionsMaster !== false) {
@@ -247,6 +254,7 @@ function buildManagedHomeSectionEnabledMap(cfg = {}) {
     top10SeriesRows: isTop10SeriesRowsSectionEnabled(cfg, masterEnabled),
     top10MovieRows: isTop10MovieRowsSectionEnabled(cfg, masterEnabled),
     tmdbTopMoviesRows: isTmdbTopMoviesRowsSectionEnabled(cfg, masterEnabled),
+    tmdbTrailerRows: isTmdbTrailerRowsSectionEnabled(cfg, masterEnabled),
     recentRows: isRecentRowsSectionEnabled(cfg, masterEnabled),
     continueRows: isContinueRowsSectionEnabled(cfg, masterEnabled),
     nextUpRows: isNextUpRowsSectionEnabled(cfg, masterEnabled),
@@ -728,7 +736,7 @@ export function getConfig() {
     useRandomContent: localStorage.getItem('useRandomContent') !== 'false',
     fullscreenMode: localStorage.getItem('fullscreenMode') === 'true' ? true : false,
     listLimit: 20,
-    version: "v2.9.1",
+    version: "v3.0.0",
     historySize: 20,
     updateInterval: 300000,
     nextTracksSource: localStorage.getItem('nextTracksSource') || 'playlist',
@@ -785,6 +793,85 @@ export function getConfig() {
     dotPreviewPlaybackMode: readDotPreviewMode(),
     preferTrailersInPreviewModal: localStorage.getItem('preferTrailersInPreviewModal') !== 'false',
     onlyTrailerInPreviewModal: localStorage.getItem('onlyTrailerInPreviewModal') === 'true' ? true : false,
+    enableCinemaPreRollModule: (() => {
+      const storedValue = localStorage.getItem('enableCinemaPreRollModule');
+      if (storedValue === null) {
+        if (__globalOverride?.enableCinemaPreRollModule === true || __globalOverride?.enableCinemaPreRollModule === false) {
+          return __globalOverride.enableCinemaPreRollModule === true;
+        }
+        if (__globalOverride?.cinemaPreRollEnabled === true || __globalOverride?.cinemaPreRollEnabled === false) {
+          return __globalOverride.cinemaPreRollEnabled === true;
+        }
+        return localStorage.getItem('cinemaPreRollEnabled') === 'true';
+      }
+      return storedValue !== 'false';
+    })(),
+    cinemaPreRollEnabled: (() => {
+      const storedValue = localStorage.getItem('cinemaPreRollEnabled');
+      if (storedValue === null) {
+        if (__globalOverride?.cinemaPreRollEnabled === true || __globalOverride?.cinemaPreRollEnabled === false) {
+          return __globalOverride.cinemaPreRollEnabled === true;
+        }
+        return false;
+      }
+      return storedValue === 'true';
+    })(),
+    cinemaPreRollStartFullscreen: (() => {
+      const storedValue = localStorage.getItem('cinemaPreRollStartFullscreen');
+      if (storedValue === null) {
+        if (__globalOverride?.cinemaPreRollStartFullscreen === true || __globalOverride?.cinemaPreRollStartFullscreen === false) {
+          return __globalOverride.cinemaPreRollStartFullscreen === true;
+        }
+        return CINEMA_PREROLL_START_FULLSCREEN_DEFAULT;
+      }
+      return storedValue === 'true';
+    })(),
+    cinemaPreRollLanguage: (() => {
+      const storedValue = localStorage.getItem('cinemaPreRollLanguage');
+      const value = String(
+        storedValue === null || storedValue === ''
+          ? (__globalOverride?.cinemaPreRollLanguage || 'auto')
+          : storedValue
+      ).trim();
+
+      if (!value) return 'auto';
+      if (value.toLowerCase() === 'auto') return 'auto';
+      return value.replace('_', '-');
+    })(),
+    cinemaPreRollTrailerCount: (() => {
+      const storedValue = localStorage.getItem('cinemaPreRollTrailerCount');
+      const fallbackValue = __globalOverride?.cinemaPreRollTrailerCount;
+      const value = parseInt(
+        storedValue === null || storedValue === ''
+          ? fallbackValue
+          : storedValue,
+        10
+      );
+      if (!Number.isFinite(value)) return 2;
+      return Math.min(5, Math.max(1, value));
+    })(),
+    cinemaPreRollRegionMode: (() => {
+      const storedValue = localStorage.getItem('cinemaPreRollRegionMode');
+      const value = String(
+        storedValue === null || storedValue === ''
+          ? (__globalOverride?.cinemaPreRollRegionMode || 'auto')
+          : storedValue
+      ).trim().toLowerCase();
+      return value === 'global' || value === 'custom' ? value : 'auto';
+    })(),
+    cinemaPreRollCustomRegion: (() => {
+      const storedValue = localStorage.getItem('cinemaPreRollCustomRegion');
+      const value = String(
+        storedValue === null
+          ? (__globalOverride?.cinemaPreRollCustomRegion || '')
+          : storedValue
+      )
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z]/g, '')
+        .slice(0, 2);
+      return value.length === 2 ? value : '';
+    })(),
     enabledGmmp: localStorage.getItem('enabledGmmp') !== 'false',
     enableQualityBadges: localStorage.getItem('enableQualityBadges') !== 'false',
     enableTrailerThenVideo,
@@ -847,6 +934,7 @@ export function getConfig() {
     enableTop10MoviesRow: (localStorage.getItem('enableTop10MoviesRow') || 'true') !== 'false',
     enableTop10SeriesRow: (localStorage.getItem('enableTop10SeriesRow') || 'true') !== 'false',
     enableTmdbTopMoviesRow: localStorage.getItem('enableTmdbTopMoviesRow') === 'true',
+    enableTmdbTrailerRows: (localStorage.getItem('enableTmdbTrailerRows') || 'true') !== 'false',
 
     enableContinueMovies: (localStorage.getItem('enableContinueMovies') || 'true') !== 'false',
     showContinueMoviesHeroCards: (localStorage.getItem('showContinueMoviesHeroCards') || 'true') !== 'false',
@@ -1291,6 +1379,7 @@ export function getHomeSectionsRuntimeConfig(source = null) {
     enableTop10SeriesRowsSection: enabledMap.top10SeriesRows,
     enableTop10MovieRowsSection: enabledMap.top10MovieRows,
     enableTmdbTopMoviesRowsSection: enabledMap.tmdbTopMoviesRows,
+    enableTmdbTrailerRowsSection: enabledMap.tmdbTrailerRows,
     enableBecauseYouWatched: enabledMap.becauseYouWatched,
     enableGenreHubs: enabledMap.genreHubs,
     enableDirectorRows: enabledMap.directorRows,
@@ -1334,6 +1423,11 @@ export function isSubtitleCustomizerModuleEnabled(source = null) {
 export function isParentalPinModuleEnabled(source = null) {
   const cfg = source || getConfig();
   return cfg?.enableParentalPinModule !== false;
+}
+
+export function isCinemaPreRollModuleEnabled(source = null) {
+  const cfg = source || getConfig();
+  return cfg?.enableCinemaPreRollModule !== false;
 }
 
 export function isDetailsModalModuleEnabled(source = null) {

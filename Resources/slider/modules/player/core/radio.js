@@ -219,6 +219,13 @@ const radioArtProbeCache = new Map();
 const radioArtResolveCache = new Map();
 const radioArtResolveInflight = new Map();
 
+export function clearRadioRuntimeCaches() {
+  radioArtProbeCache.clear();
+  radioArtResolveCache.clear();
+  radioArtResolveInflight.clear();
+  try { cleanupAttachedRadioStream(musicPlayerState?.audio); } catch {}
+}
+
 function getRadioArtResolveKey(station, candidates = []) {
   const stationIdentity = stationKey(station);
   return stationIdentity || candidates.join("|");

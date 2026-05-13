@@ -1540,6 +1540,7 @@ export async function getHighResImageUrls(item, backdropIndex) {
 
 export function createImageWarmQueue({ concurrency = 3 } = {}) {
   const q = [];
+  const timers = new Set();
   let active = 0;
 
   const runNext = () => {
@@ -1555,18 +1556,28 @@ export function createImageWarmQueue({ concurrency = 3 } = {}) {
           try { link.fetchPriority = 'low'; } catch {}
           link.href = S(job.url);
           document.head.appendChild(link);
-          setTimeout(() => link.remove(), 1500);
+          const removeTimer = setTimeout(() => {
+            timers.delete(removeTimer);
+            try { link.remove(); } catch {}
+          }, 1500);
+          timers.add(removeTimer);
         }
         await new Promise((res) => {
           const img = new Image();
           img.decoding = 'async';
           img.loading = 'eager';
-          img.src = S(job.url);
-          img.onload = async () => {
-            try { await img.decode?.(); } catch {}
+          const done = () => {
+            img.onload = null;
+            img.onerror = null;
+            try { img.src = ""; } catch {}
             res();
           };
-          img.onerror = () => res();
+          img.onload = async () => {
+            try { await img.decode?.(); } catch {}
+            done();
+          };
+          img.onerror = () => done();
+          img.src = S(job.url);
         });
       } finally {
         active--;
@@ -1584,5 +1595,15 @@ export function createImageWarmQueue({ concurrency = 3 } = {}) {
     q.push({ url, shortPreload });
     ric(runNext, { timeout: 1000 });
   }
-  return { enqueue };
+  function clear({ resetSeen = true } = {}) {
+    q.length = 0;
+    for (const id of timers) {
+      try { clearTimeout(id); } catch {}
+    }
+    timers.clear();
+    if (resetSeen) {
+      try { enqueue._seen?.clear?.(); } catch {}
+    }
+  }
+  return { enqueue, clear };
 }

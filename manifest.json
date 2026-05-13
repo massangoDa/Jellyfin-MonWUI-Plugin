@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/G-grbz/Jellyfin-MonWUI-Plugin/main/img/icon.png",
     "versions": [
     {
+        "version": "3.0.0.0",
+        "changelog": "v3.0.0\n\nChanges:\n- Added Cinema Pre-Roll system with TMDb-based trailer playback\n- Introduced server-side scoped JSON cache (replacing IndexedDB)\n- Integrated trailer cards and enhanced detail modal for virtual items\n- Improved slider behavior, UserData sync, and playback-aware updates\n- Expanded cache coverage (home, recommendations, GMMP, slider data)\n- Implemented automatic cache migration and new cache management tools\n- Optimized recommendation logic and runtime cache handling\n- Fixed \"Who’s Watching\" layout issue (issues #53)\n- Updated smart auto-pause behavior (0 disables condition) (issues #52)\n\nNotes:\n- TMDb API key required for Cinema Pre-Roll\n- Restart Jellyfin after update\n- Hard refresh (Ctrl + F5) may be required",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/G-grbz/Jellyfin-MonWUI-Plugin/releases/download/v3.0.0/JMSFusion-3.0.0.0-server.zip",
+        "checksum": "2e018286fb4735a3dabc8a50612c22c1",
+        "timestamp": "2026-05-13T10:19:27.2592618Z"
+      },
+    {
         "version": "2.9.1.0",
         "changelog": "v2.9.1\n\nChanges:\n- Improved home slider initialization stability\n- Prevented duplicate slider initialization while pending\n- Delayed restore and repair operations until slide creation is fully completed\n- Improved header offset synchronization across resize, navigation, visibility changes, and DOM mutations\n- Reused slide metadata color seeds for active navigation dot styling consistency\n- Applied minor slider and navigation refinements\n\nNotes:\n- Restart Jellyfin after update\n- A hard refresh (Ctrl + F5) may be required after updating",
         "targetAbi": "10.11.0.0",

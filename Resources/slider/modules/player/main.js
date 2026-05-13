@@ -609,7 +609,11 @@ export async function destroyGmmp({ reason = "manual" } = {}) {
       playerUiMod,
       artistModalMod,
       genreFilterMod,
-      notificationMod
+      notificationMod,
+      playlistCoreMod,
+      id3ReaderMod,
+      lyricsMod,
+      radioCoreMod
     ] = await Promise.all([
       import("./core/state.js").catch(() => null),
       import("./player/playback.js").catch(() => null),
@@ -620,13 +624,22 @@ export async function destroyGmmp({ reason = "manual" } = {}) {
       import("./ui/playerUI.js").catch(() => null),
       import("./ui/artistModal.js").catch(() => null),
       import("./ui/genreFilterModal.js").catch(() => null),
-      import("./ui/notification.js").catch(() => null)
+      import("./ui/notification.js").catch(() => null),
+      import("./core/playlist.js").catch(() => null),
+      import("./lyrics/id3Reader.js").catch(() => null),
+      import("./lyrics/lyrics.js").catch(() => null),
+      import("./core/radio.js").catch(() => null)
     ]);
 
     const musicPlayerState = stateMod?.musicPlayerState;
     if (!musicPlayerState) return false;
 
     await playbackMod?.stopPlayback?.({ resetSource: true }).catch(() => false);
+    try { playbackMod?.clearPlaybackRuntimeCaches?.(); } catch {}
+    try { playlistCoreMod?.cleanupPlaylistRuntimeState?.(); } catch {}
+    try { lyricsMod?.clearLyricsRuntimeCaches?.(); } catch {}
+    try { id3ReaderMod?.clearId3RuntimeCaches?.(); } catch {}
+    try { radioCoreMod?.clearRadioRuntimeCaches?.(); } catch {}
 
     try { progressMod?.cleanupProgressControls?.(); } catch {}
     try { progressMod?.cleanupMediaSession?.(); } catch {}
@@ -654,6 +667,40 @@ export async function destroyGmmp({ reason = "manual" } = {}) {
     musicPlayerState.playlistSearchInput = null;
     musicPlayerState.radioModal = null;
     musicPlayerState.mediaSessionInitialized = false;
+    musicPlayerState.playlist = [];
+    musicPlayerState.originalPlaylist = [];
+    musicPlayerState.effectivePlaylist = [];
+    musicPlayerState.combinedPlaylist = [];
+    musicPlayerState.userAddedTracks = [];
+    musicPlayerState.selectedItems = [];
+    musicPlayerState.selectedGenres = [];
+    musicPlayerState.currentLyrics = [];
+    musicPlayerState.radioSharedStations = [];
+    musicPlayerState.radioSearchResults = [];
+    musicPlayerState.playedHistory = [];
+    musicPlayerState.lyricsCache = {};
+    musicPlayerState.currentTrack = null;
+    musicPlayerState.currentTrackName = null;
+    musicPlayerState.currentAlbumName = null;
+    musicPlayerState.currentArtwork = null;
+    musicPlayerState.currentPlaylistId = null;
+    musicPlayerState.playlistSource = null;
+    musicPlayerState.currentIndex = 0;
+    musicPlayerState.currentTrackDuration = 0;
+    musicPlayerState.radioNowPlayingSource = null;
+    musicPlayerState.isLiveStream = false;
+    musicPlayerState.isUserModified = false;
+    musicPlayerState.isPlayingReported = false;
+    musicPlayerState.lastReportedItemId = null;
+    musicPlayerState.syncedLyrics = {
+      lines: [],
+      currentLine: -1
+    };
+    try { musicPlayerState.onTrackChanged?.splice?.(0); } catch {}
+    try { musicPlayerState.id3TagsCache?.clear?.(); } catch {}
+    try { musicPlayerState.id3ImageCache?.clear?.(); } catch {}
+    musicPlayerState.id3TagsCache = new Map();
+    musicPlayerState.id3ImageCache = new Map();
     try { musicPlayerState.selectedTracks?.clear?.(); } catch {}
     musicPlayerState.selectedTracks = new Set();
 

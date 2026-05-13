@@ -238,13 +238,17 @@ function writeTokenStore(obj) {
   bumpTokenStoreRev();
 }
 
-function rememberUserToken({ userId, name, accessToken, primaryImageTag }) {
+function rememberUserToken(tokenInfo = {}) {
+  const { userId, name, accessToken, primaryImageTag } = tokenInfo;
   if (!userId || !accessToken) return;
   const store = readTokenStore();
+  const hasPrimaryImageTag = Object.prototype.hasOwnProperty.call(tokenInfo, "primaryImageTag");
   store[userId] = {
     accessToken,
     name: name || store[userId]?.name || "",
-    primaryImageTag: primaryImageTag || store[userId]?.primaryImageTag || "",
+    primaryImageTag: hasPrimaryImageTag
+      ? getUserPrimaryImageTag({ PrimaryImageTag: primaryImageTag })
+      : (store[userId]?.primaryImageTag || ""),
     ts: Date.now(),
   };
   writeTokenStore(store);
@@ -274,6 +278,26 @@ function forgetRememberedToken(userId) {
       writeTokenStore(store);
       return true;
     }
+  } catch {}
+  return false;
+}
+
+function clearRememberedPrimaryImageTag(userId, failedTag = "") {
+  if (!userId) return false;
+  try {
+    const store = readTokenStore();
+    const rec = store?.[userId] || null;
+    if (!rec) return false;
+
+    const currentTag = String(rec.primaryImageTag || "").trim();
+    const staleTag = String(failedTag || "").trim();
+    if (!currentTag || (staleTag && currentTag !== staleTag)) return false;
+
+    rec.primaryImageTag = "";
+    rec.ts = Date.now();
+    store[userId] = rec;
+    writeTokenStore(store);
+    return true;
   } catch {}
   return false;
 }
@@ -527,17 +551,27 @@ function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
 
+function getUserPrimaryImageTag(user) {
+  return String(
+    user?.PrimaryImageTag ??
+    user?.primaryImageTag ??
+    user?.ImageTags?.Primary ??
+    user?.imageTags?.Primary ??
+    ""
+  ).trim();
+}
+
 function userAvatarUrl({ Id, PrimaryImageTag }, size = 220) {
   const id = Id;
   if (!id) return "";
+  const tag = getUserPrimaryImageTag({ PrimaryImageTag });
+  if (!tag) return "";
 
   const qs = new URLSearchParams();
   qs.set("quality", "90");
   qs.set("maxHeight", String(size));
   qs.set("maxWidth", String(size));
-
-  const tag = PrimaryImageTag || "";
-  if (tag) qs.set("tag", tag);
+  qs.set("tag", tag);
   try {
     const token = String(getSessionInfo?.()?.accessToken || "").trim();
     if (token) qs.set("api_key", token);
@@ -703,7 +737,10 @@ function renderProfileAvatarSlot(slot, user, { size = 220, eager = false, big = 
   setAvatarFallback(slot, user, { requestId, big });
 
   const userId = String(user?.Id || "").trim();
-  const tag = String(primaryImageTag ?? user?.PrimaryImageTag ?? "").trim();
+  const tag = getUserPrimaryImageTag({
+    ...user,
+    PrimaryImageTag: primaryImageTag ?? user?.PrimaryImageTag,
+  });
   if (!userId) {
     assignPreferredFallbackAvatarToSlot(slot, user, { requestId, size, eager, big }).catch(() => {});
     return;
@@ -719,6 +756,7 @@ function renderProfileAvatarSlot(slot, user, { size = 220, eager = false, big = 
     requestId,
     eager,
     onError: () => {
+      clearRememberedPrimaryImageTag(userId, tag);
       assignPreferredFallbackAvatarToSlot(slot, user, { requestId, size, eager, big }).catch(() => {
         setAvatarFallback(slot, user, { requestId, big });
       });
@@ -1194,8 +1232,8 @@ export function initProfileChooser(options = {}) {
       if (!uid) return;
 
       const u = await fetchUserByIdAuthed(uid).catch(() => null);
-      const newTag = String(u?.PrimaryImageTag || "").trim();
-      if (!newTag) return;
+      if (!u) return;
+      const newTag = getUserPrimaryImageTag(u);
 
       const store = readTokenStore();
       const cur = store?.[uid] || null;
@@ -1293,16 +1331,31 @@ export function initProfileChooser(options = {}) {
 
       let users = await fetchPublicUsers().catch(() => []);
 
-      if (users.length <= 1) {
-        try {
-          const ready = (typeof isAuthReadyStrict === "function" ? isAuthReadyStrict() : false);
-          if (ready) {
-            await waitForAuthReadyStrict?.(2000).catch(() => {});
-            const more = await fetchAllUsersAuthed().catch(() => []);
-            if (more.length > users.length) users = more;
+      try {
+        const ready = (typeof isAuthReadyStrict === "function" ? isAuthReadyStrict() : false);
+        if (ready) {
+          await waitForAuthReadyStrict?.(2000).catch(() => {});
+          const more = await fetchAllUsersAuthed().catch(() => []);
+          if (Array.isArray(more) && more.length) {
+            const merged = new Map();
+            for (const u of users) {
+              const id = String(u?.Id || u?.id || "").trim();
+              if (id) merged.set(id, u);
+            }
+            for (const u of more) {
+              const id = String(u?.Id || u?.id || "").trim();
+              if (!id) continue;
+              const prev = merged.get(id) || {};
+              merged.set(id, {
+                ...prev,
+                ...u,
+                PrimaryImageTag: getUserPrimaryImageTag(u) || getUserPrimaryImageTag(prev),
+              });
+            }
+            users = Array.from(merged.values());
           }
-        } catch {}
-      }
+        }
+      } catch {}
 
       currentList = users
         .filter(u => (u?.Id || u?.id) && (u?.Name || u?.name))
@@ -1310,7 +1363,7 @@ export function initProfileChooser(options = {}) {
           Id: String(u.Id || u.id),
           Name: String(u.Name || u.name),
           HasPassword: !!u.HasPassword,
-          PrimaryImageTag: u.PrimaryImageTag || "",
+          PrimaryImageTag: getUserPrimaryImageTag(u),
         }));
 
       if (!currentList.length && currentUserId) {
@@ -1466,7 +1519,7 @@ export function initProfileChooser(options = {}) {
       const slot = tile.querySelector(".jf-profile-avatar");
       if (!user || !slot) return;
 
-      const tag = store?.[id]?.primaryImageTag || user.PrimaryImageTag || "";
+      const tag = getUserPrimaryImageTag(user) || "";
       const nextKey = `${id}|${tag}`;
       const prevKey = slot.getAttribute("data-avatar-key") || "";
       if (prevKey === nextKey) return;
@@ -1503,8 +1556,7 @@ export function initProfileChooser(options = {}) {
     const hintEl = overlay.querySelector(".jf-profile-login-hint");
     const input = overlay.querySelector(".jf-profile-login-input");
 
-    const store = readTokenStore();
-    const tag = store?.[user.Id]?.primaryImageTag || user.PrimaryImageTag || "";
+    const tag = getUserPrimaryImageTag(user) || "";
     if (cardAvatar) {
       renderProfileAvatarSlot(
         cardAvatar,
@@ -1531,7 +1583,7 @@ export function initProfileChooser(options = {}) {
       const u = resp?.User || resp?.user || {};
       const userId = String(u?.Id || user.Id || "").trim();
       const userName = String(u?.Name || user.Name || "").trim();
-      const primaryImageTag = u?.PrimaryImageTag || "";
+      const primaryImageTag = getUserPrimaryImageTag(u);
 
       if (!accessToken || !userId) throw new Error(L("loginEksikYanıt", "Login yanıtı eksik (token/userId)"));
 
@@ -1577,8 +1629,8 @@ export function initProfileChooser(options = {}) {
 
       try {
         const u = await fetchUserByIdAuthed(user.Id).catch(() => null);
-        const newTag = u?.PrimaryImageTag || "";
-        if (newTag) {
+        if (u) {
+          const newTag = getUserPrimaryImageTag(u);
           rememberUserToken({
             userId: user.Id,
             name: remembered.name || user.Name,

@@ -40,6 +40,22 @@ let __bgHydrationRAF = 0;
 let __bgScrollActive = false;
 let __bgScrollIdleTimer = 0;
 
+export function cleanupSlideCreatorRuntime({ clearWarmQueue = true } = {}) {
+  if (__bgHydrationRAF) {
+    try { cancelAnimationFrame(__bgHydrationRAF); } catch {}
+    __bgHydrationRAF = 0;
+  }
+  __bgHydrationQueue = [];
+  if (__bgScrollIdleTimer) {
+    clearTimeout(__bgScrollIdleTimer);
+    __bgScrollIdleTimer = 0;
+  }
+  __bgScrollActive = false;
+  if (clearWarmQueue) {
+    try { backdropWarmQueue.clear?.({ resetSeen: true }); } catch {}
+  }
+}
+
 function bgQueueHydration(fn) {
   __bgHydrationQueue.push(fn);
   if (!__bgHydrationRAF) {
@@ -393,10 +409,9 @@ async function createSlide(item, options = {}) {
   const slidesContainer = createSlidesContainer(indexPage);
   const existing = slidesContainer.querySelector(`.monwui-slide[data-item-id="${itemIdRaw}"]`);
   (function bindSlidesScrollPerf(){
-    if (window.__jmsSlidesScrollBound) return;
-    window.__jmsSlidesScrollBound = true;
-    const scroller = document.querySelector('#monwui-slides-container');
+    const scroller = slidesContainer;
     if (!scroller) return;
+    if (scroller.__jmsSlidesScrollPerfBound) return;
     const onScrollPerf = () => {
       __bgScrollActive = true;
       if (__bgScrollIdleTimer) clearTimeout(__bgScrollIdleTimer);
@@ -408,6 +423,17 @@ async function createSlide(item, options = {}) {
       }, BG_SCROLL_IDLE_MS);
     };
     scroller.addEventListener('scroll', onScrollPerf, { passive: true });
+    scroller.__jmsSlidesScrollPerfBound = true;
+    scroller.__jmsSlidesScrollPerfCleanup = () => {
+      try { scroller.removeEventListener('scroll', onScrollPerf); } catch {}
+      scroller.__jmsSlidesScrollPerfBound = false;
+      scroller.__jmsSlidesScrollPerfCleanup = null;
+      if (__bgScrollIdleTimer) {
+        clearTimeout(__bgScrollIdleTimer);
+        __bgScrollIdleTimer = 0;
+      }
+      __bgScrollActive = false;
+    };
   })();
   if (existing) {
    try { existing.__cleanupSlide?.(); } catch {}

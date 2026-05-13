@@ -326,6 +326,9 @@ function getManagedHomeSectionOrderLabel(name, config, labels) {
   if (name === "tmdbTopMoviesRows") {
     return labels?.tmdbTopMovies || "TMDb En Iyi Filmler";
   }
+  if (name === "tmdbTrailerRows") {
+    return labels?.tmdbTrailerRowsTitle || "TMDb Vizyona Yakın Fragmanlar";
+  }
   if (name === "recentRows") {
     return labels?.managedRecentRowsLabel || "Son Eklenenler";
   }
@@ -1928,6 +1931,13 @@ export function createStudioHubsPanel(config, labels) {
   );
   recentSubWrap.appendChild(enableTmdbTopMoviesRow);
 
+  const enableTmdbTrailerRows = createCheckbox(
+    'enableTmdbTrailerRows',
+    labels?.enableTmdbTrailerRows || 'TMDb vizyon fragmanları satırı',
+    config.enableTmdbTrailerRows !== false
+  );
+  recentSubWrap.appendChild(enableTmdbTrailerRows);
+
   const enableRecentMoviesRow = createCheckbox(
     'enableRecentMoviesRow',
     labels?.enableRecentMoviesRow || 'Son eklenen filmler satırı',
@@ -2091,6 +2101,7 @@ export function createStudioHubsPanel(config, labels) {
   const top10SeriesCb = getCb(enableTop10SeriesRow);
   const top10MoviesCb = getCb(enableTop10MoviesRow);
   const tmdbTopMoviesCb = getCb(enableTmdbTopMoviesRow);
+  const tmdbTrailerRowsCb = getCb(enableTmdbTrailerRows);
   const recMovCb = getCb(enableRecentMoviesRow);
   const recMovHeroCb = getCb(showRecentMoviesHeroCards);
   const recSerCb = getCb(enableRecentSeriesRow);
@@ -2117,6 +2128,7 @@ export function createStudioHubsPanel(config, labels) {
       if (top10SeriesCb) top10SeriesCb.checked = false;
       if (top10MoviesCb) top10MoviesCb.checked = false;
       if (tmdbTopMoviesCb) tmdbTopMoviesCb.checked = false;
+      if (tmdbTrailerRowsCb) tmdbTrailerRowsCb.checked = false;
       if (recMovCb) recMovCb.checked = false;
       if (recMovHeroCb) recMovHeroCb.checked = false;
       if (recSerCb) recSerCb.checked = false;

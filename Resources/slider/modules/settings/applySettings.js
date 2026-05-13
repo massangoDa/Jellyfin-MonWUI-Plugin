@@ -7,6 +7,13 @@ import { updateHeaderUserAvatar, updateAvatarStyles, clearAvatarCache } from "..
 import { showNotification } from "../player/ui/notification.js";
 import { updateJmsPluginConfig } from "../jmsPluginConfig.js";
 import { closeDetailsModalIfLoaded } from "../detailsModalLoader.js";
+import {
+  buildCinemaPreRollCacheUrl,
+  getCinemaPreRollLocaleSignature,
+  normalizeCinemaPreRollCustomRegion,
+  normalizeCinemaPreRollLanguageSetting,
+  normalizeCinemaPreRollRegionMode
+} from "../cinemaPreRollLocale.js";
 import { saveStudioHubVisibility } from "../studioHubsShared.js";
 
 const _intOr = (v, def) => {
@@ -21,7 +28,7 @@ const _clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 const _DEFAULT_IDLE_MS      = 45000;
 const _DEFAULT_UNFOCUS_MS   = 15000;
 const _DEFAULT_OFFSCREEN_MS = 10000;
-const _MIN_MIN = 0.1;
+const _MIN_MIN = 0;
 const _MAX_MIN = 1000;
 
 let __isAdminCached_apply = null;
@@ -178,6 +185,27 @@ async function getCurrentUserId_apply() {
   }
 }
 
+async function forceRefreshCinemaPreRollCache_apply(sourceConfig) {
+  const token = getEmbyTokenSafe_apply();
+  const userId = await getCurrentUserId_apply();
+  const url = buildCinemaPreRollCacheUrl(sourceConfig, { force: true });
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      ...(token ? { "X-Emby-Token": token } : {}),
+      ...(userId ? { "X-Emby-UserId": userId } : {})
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Cinema pre-roll cache HTTP ${response.status}`);
+  }
+
+  return response.json().catch(() => ({}));
+}
+
 async function updateCastModuleSettings_apply(patch = {}) {
   const token = getEmbyTokenSafe_apply();
   const userId = await getCurrentUserId_apply();
@@ -236,7 +264,12 @@ const USER_ONLY_KEYS = [
   "randomDicebearAvatar",
   "dicebearParams",
   "playerTheme",
-  "settingsHotkey"
+  "settingsHotkey",
+  "cinemaPreRollEnabled",
+  "cinemaPreRollStartFullscreen",
+  "cinemaPreRollTrailerCount",
+  "cinemaPreRollRegionMode",
+  "cinemaPreRollCustomRegion"
 ];
 
   export async function applySettings(reload = false) {
@@ -262,6 +295,7 @@ const USER_ONLY_KEYS = [
           ? await isAdminUser_apply()
           : false;
         const config = getConfig();
+        const previousCinemaPreRollLocaleSignature = getCinemaPreRollLocaleSignature(config);
         const oldTheme = getConfig().playerTheme;
         const oldPlayerStyle = getConfig().playerStyle;
         const useGlobalStudioHubsVisibility = cfgGuard?.forceGlobalUserSettings === true;
@@ -412,6 +446,22 @@ const USER_ONLY_KEYS = [
               if (v === 'trailer' || v === 'video' || v === 'onlyTrailer') return v;
               return null;
             })(),
+            enableCinemaPreRollModule: formData.get('enableCinemaPreRollModule') === 'on',
+            cinemaPreRollEnabled: formData.get('cinemaPreRollEnabled') === 'on',
+            cinemaPreRollStartFullscreen: formData.get('cinemaPreRollStartFullscreen') === 'on',
+            cinemaPreRollLanguage: hasNamedControl('cinemaPreRollLanguage')
+              ? normalizeCinemaPreRollLanguageSetting(formData.get('cinemaPreRollLanguage'))
+              : normalizeCinemaPreRollLanguageSetting(config.cinemaPreRollLanguage),
+            cinemaPreRollTrailerCount: Math.min(
+              5,
+              Math.max(1, _intOr(formData.get('cinemaPreRollTrailerCount'), config.cinemaPreRollTrailerCount ?? 2))
+            ),
+            cinemaPreRollRegionMode: hasNamedControl('cinemaPreRollRegionMode')
+              ? normalizeCinemaPreRollRegionMode(formData.get('cinemaPreRollRegionMode'))
+              : normalizeCinemaPreRollRegionMode(config.cinemaPreRollRegionMode),
+            cinemaPreRollCustomRegion: hasNamedControl('cinemaPreRollCustomRegion')
+              ? normalizeCinemaPreRollCustomRegion(formData.get('cinemaPreRollCustomRegion'))
+              : normalizeCinemaPreRollCustomRegion(config.cinemaPreRollCustomRegion),
             previewPlaybackMode: (() => {
               if (formData.get('disableAllPlayback') === 'on') return 'none';
               if (formData.get('enableTrailerThenVideo') === 'on') return 'trailerThenVideo';
@@ -493,6 +543,11 @@ const USER_ONLY_KEYS = [
               const master = formData.get('enableRecentRows') === 'on';
               if (!master) return false;
               return formData.get('enableTmdbTopMoviesRow') === 'on';
+            })(),
+            enableTmdbTrailerRows: (() => {
+              const master = formData.get('enableRecentRows') === 'on';
+              if (!master) return false;
+              return formData.get('enableTmdbTrailerRows') === 'on';
             })(),
             enableRecentMoviesRow: (() => {
               const master = formData.get('enableRecentRows') === 'on';
@@ -974,12 +1029,17 @@ const USER_ONLY_KEYS = [
           (cfgGuard?.forceGlobalUserSettings && !isAdmin)
             ? pick(updatedConfig, USER_ONLY_KEYS)
             : updatedConfig;
+        const persistedConfig = { ...config, ...toSave };
+        const shouldForceCinemaPreRollCacheRefresh =
+          previousCinemaPreRollLocaleSignature !== getCinemaPreRollLocaleSignature(persistedConfig);
 
         const hasTmdbApiKeyField = formData.has('TmdbApiKey');
         const tmdbApiKey = String(formData.get('TmdbApiKey') || '').trim();
 
         const rawInput = formData.get('sortingKeywords')?.trim();
-        updateConfig(toSave);
+        updateConfig(toSave, {
+          bypassGlobalLock: cfgGuard?.forceGlobalUserSettings === true && isAdmin === true
+        });
         try {
           window.__JMS_CUSTOM_SPLASH__?.syncFromConfig?.(updatedConfig.enableCustomSplashScreen);
         } catch {}
@@ -1003,6 +1063,18 @@ const USER_ONLY_KEYS = [
 
         if (isAdmin && hasTmdbApiKeyField) {
           await updateJmsPluginConfig({ TmdbApiKey: tmdbApiKey });
+        }
+        if (shouldForceCinemaPreRollCacheRefresh) {
+          try {
+            await forceRefreshCinemaPreRollCache_apply(persistedConfig);
+          } catch (error) {
+            console.warn("Cinema pre-roll cache force refresh failed:", error);
+            showNotification(
+              cfgGuard?.languageLabels?.cinemaPreRollCacheRefreshFailed || "Ön gösterim cache'i yenilenemedi.",
+              3200,
+              "warning"
+            );
+          }
         }
         try {
           const watchlistModule = await import("../watchlist.js");

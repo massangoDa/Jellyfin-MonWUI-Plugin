@@ -11,6 +11,8 @@ namespace Jellyfin.Plugin.JMSFusion
         public void RegisterServices(IServiceCollection services, IServerApplicationHost applicationHost)
         {
             services.AddSingleton<TrailerAutomationService>();
+            services.AddSingleton<CinemaPreRollCacheService>();
+            services.AddSingleton<ScopedCacheJsonService>();
             services.AddTransient<IStartupFilter, JMSStartupFilter>();
         }
     }
