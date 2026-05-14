@@ -1546,6 +1546,7 @@ export const languageLabels = {
   optionGerman: "🇩🇪 Deutsch",
   optionFrench: "🇫🇷 Français",
   optionRussian: "🇷🇺 Русский",
+  optionJapanese: "🇯🇵 Японский",
   aboutHeader: "О программе",
   aboutCreator: "Создано",
   aboutSupport: "Для предложений, запросов или проблем:",

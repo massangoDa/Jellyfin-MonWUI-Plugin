@@ -66,6 +66,7 @@ export function createSliderPanel(config, labels) {
     { value: 'deu',  label: labels.optionGerman  || '🇩🇪 Deutsch' },
     { value: 'fre',  label: labels.optionFrench  || '🇫🇷 Français' },
     { value: 'rus',  label: labels.optionRussian || '🇷🇺 Русский' },
+    { value: 'jpn',  label: labels.optionJapanese || '🇯🇵 日本語' },
   ];
 
   languages.forEach(lang => {
