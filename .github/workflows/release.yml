@@ -42,6 +42,7 @@ jobs:
           sdk_version=$(python3 - <<'PY'
 import json
 import re
+import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -74,7 +75,8 @@ for csproj in sorted(repo.glob('*.csproj')):
         print(f"{m.group(1)}.{m.group(2)}.x")
         raise SystemExit(0)
 
-raise SystemExit('Unable to determine required .NET SDK version from global.json or .csproj target framework.')
+print('Unable to determine required .NET SDK version from global.json or .csproj target framework.', file=sys.stderr)
+raise SystemExit(1)
 PY
 )
 
