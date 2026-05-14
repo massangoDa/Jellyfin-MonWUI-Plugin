@@ -4,6 +4,7 @@ import { languageLabels as deuLabels } from './deu.js';
 import { languageLabels as fraLabels } from './fre.js';
 import { languageLabels as rusLabels } from './rus.js';
 import { languageLabels as spaLabels } from './spa.js';
+import { languageLabels as jpnLabels } from './jpn.js';
 
 export const AUTO_LANGUAGE_CHANGE_EVENT = 'jms:auto-language-changed';
 
@@ -26,6 +27,7 @@ export function normalizeLanguageCode(lang) {
   if (raw === 'fre' || raw === 'fra' || base === 'fr') return 'fre';
   if (raw === 'rus' || base === 'ru') return 'rus';
   if (raw === 'spa' || base === 'es') return 'spa';
+  if (raw === 'jpn' || base === 'ja') return 'jpn';
 
   return 'eng';
 }
@@ -42,6 +44,7 @@ export function getLanguageLabels(lang) {
     case 'rus': return rusLabels;
     case 'spa': return spaLabels;
     case 'tur': return turLabels;
+    case 'jpn': return jpnLabels;
     default:    return engLabels;
   }
 }
@@ -59,6 +62,7 @@ export function detectBrowserLanguage() {
     if (code.startsWith('fr') || base === 'fr') return 'fre';
     if (code.startsWith('ru') || base === 'ru') return 'rus';
     if (code.startsWith('es') || base === 'es') return 'spa';
+    if (code.startsWith('ja') || base === 'ja') return 'jpn';
   }
   return 'eng';
 }
