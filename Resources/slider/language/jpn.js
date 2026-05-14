@@ -1,6 +1,6 @@
 export const languageLabels = {
-  detailsTitle: "Details",
-  content: "Content",
+  detailsTitle: "詳細",
+  content: "コンテンツ",
   unknownUser: "Unknown user",
   watchlistSettingsTab: "Watchlist Settings",
   cinemaPreRollTab: "Cinema Pre-Roll",
