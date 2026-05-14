@@ -1,0 +1,153 @@
+name: Release Plugin
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve plugin version from tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          raw_tag="${GITHUB_REF_NAME}"
+          version="${raw_tag#v}"
+
+          if [[ ! "$version" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "Tag '$raw_tag' is not a supported version tag (expected vX.Y.Z or X.Y.Z)." >&2
+            exit 1
+          fi
+
+          echo "raw_tag=$raw_tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Detect required .NET SDK
+        id: dotnet
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sdk_version=$(python3 - <<'PY'
+import json
+import re
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+repo = Path('.')
+global_json = repo / 'global.json'
+if global_json.exists():
+    data = json.loads(global_json.read_text(encoding='utf-8'))
+    sdk = data.get('sdk', {}).get('version')
+    if sdk:
+        parts = sdk.split('.')
+        if len(parts) >= 2:
+            print(f"{parts[0]}.{parts[1]}.x")
+        else:
+            print(f"{sdk}.x")
+        raise SystemExit(0)
+
+for csproj in sorted(repo.glob('*.csproj')):
+    root = ET.parse(csproj).getroot()
+    tfm = None
+    for node_name in ('TargetFramework', 'TargetFrameworks'):
+        node = root.find(f'.//{node_name}')
+        if node is not None and node.text:
+            tfm = node.text.split(';')[0].strip()
+            break
+    if not tfm:
+        continue
+
+    m = re.match(r'^net(\d+)\.(\d+)', tfm)
+    if m:
+        print(f"{m.group(1)}.{m.group(2)}.x")
+        raise SystemExit(0)
+
+raise SystemExit('Unable to determine required .NET SDK version from global.json or .csproj target framework.')
+PY
+)
+
+          echo "version=$sdk_version" >> "$GITHUB_OUTPUT"
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ steps.dotnet.outputs.version }}
+
+      - name: Build plugin (Release)
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore
+          dotnet build -c Release /p:Version=${{ steps.version.outputs.version }}
+
+      - name: Package release assets
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="${{ steps.version.outputs.version }}"
+          asset_name="JMSFusion-${version}-server.zip"
+          md5_name="${asset_name}.md5"
+
+          dll_path=$(find . -type f -path './bin/Release/*/Jellyfin.Plugin.JMSFusion.dll' | head -n 1)
+          if [[ -z "$dll_path" ]]; then
+            echo "Could not find Jellyfin.Plugin.JMSFusion.dll in bin/Release output." >&2
+            exit 1
+          fi
+
+          if [[ ! -f "meta.json" ]]; then
+            echo "meta.json not found at repository root." >&2
+            exit 1
+          fi
+
+          staging_dir="$RUNNER_TEMP/jmsfusion-package"
+          output_dir="$RUNNER_TEMP/jmsfusion-release"
+          mkdir -p "$staging_dir" "$output_dir"
+
+          cp "$dll_path" "$staging_dir/Jellyfin.Plugin.JMSFusion.dll"
+          cp "meta.json" "$staging_dir/meta.json"
+
+          zip_path="$output_dir/$asset_name"
+          md5_path="$output_dir/$md5_name"
+
+          (
+            cd "$staging_dir"
+            zip -9 "$zip_path" Jellyfin.Plugin.JMSFusion.dll meta.json
+          )
+
+          checksum=$(md5sum "$zip_path" | awk '{print $1}')
+          printf '%s  %s\n' "$checksum" "$asset_name" > "$md5_path"
+
+          {
+            echo "zip_path=$zip_path"
+            echo "md5_path=$md5_path"
+            echo "asset_name=$asset_name"
+            echo "checksum=$checksum"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.raw_tag }}
+          name: JMSFusion ${{ steps.version.outputs.version }}
+          body: |
+            Release asset: `${{ steps.package.outputs.asset_name }}`
+
+            MD5: `${{ steps.package.outputs.checksum }}`
+          files: |
+            ${{ steps.package.outputs.zip_path }}
+            ${{ steps.package.outputs.md5_path }}
+          overwrite_files: true
