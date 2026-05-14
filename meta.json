@@ -1,15 +1,13 @@
 {
-  "category": "General",
-  "description": "JMSFusion injects your custom JS modules into the Jellyfin web UI (response rewrite) and serves them from an external directory or embedded /Resources/slider.",
+  "guid": "c0b4a5e0-2f6a-4e70-9c5f-1e7c2d0b7f12",
   "name": "JMSFusion",
-  "owner": "G-Grbz",
-  "version": "3.0.0.0",
-  "status": "Active",
-  "autoUpdate": true,
+  "description": "Frontend enhancement plugin for Jellyfin Web.",
+  "overview": "Custom script loader for the Jellyfin web UI.",
+  "owner": "massangoDa",
+  "category": "General",
+  "version": "1.0.3",
   "targetAbi": "10.11.0.0",
-  "sourceUrl": "https://github.com/G-grbz/Jellyfin-Media-Slider",
-  "imagePathLinux": "/var/lib/jellyfin/plugins/JMSFusion_3.0.0.0/icon.png",
-  "imagePathWindows": "%ProgramData%/Jellyfin/Server/plugins/JMSFusion_3.0.0.0/icon.png",
-  "timestamp": "2026-05-14T21:50:30.9326419Z",
-  "guid": "c0b4a5e0-2f6a-4e70-9c5f-1e7c2d0b7f12"
+  "timestamp": "2026-01-01T00:00:00.0000000Z",
+  "imagePathLinux": "/var/lib/jellyfin/plugins/JMSFusion_1.0.3/icon.png",
+  "imagePathWindows": "%ProgramData%/Jellyfin/Server/plugins/JMSFusion_1.0.3/icon.png"
 }
