@@ -21,15 +21,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           raw_tag="${GITHUB_REF_NAME}"
           version="${raw_tag#v}"
-
           if [[ ! "$version" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
             echo "Tag '$raw_tag' is not a supported version tag (expected vX.Y.Z or X.Y.Z)." >&2
             exit 1
           fi
-
           echo "raw_tag=$raw_tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
@@ -38,7 +35,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           sdk_version=$(python3 - <<'PY'
 import json
 import re
@@ -79,7 +75,6 @@ print('Unable to determine required .NET SDK version from global.json or .csproj
 raise SystemExit(1)
 PY
 )
-
           echo "version=$sdk_version" >> "$GITHUB_OUTPUT"
 
       - name: Setup .NET SDK
@@ -99,40 +94,31 @@ PY
         shell: bash
         run: |
           set -euo pipefail
-
           version="${{ steps.version.outputs.version }}"
           asset_name="JMSFusion-${version}-server.zip"
           md5_name="${asset_name}.md5"
-
           dll_path=$(find . -type f -path './bin/Release/*/Jellyfin.Plugin.JMSFusion.dll' | head -n 1)
           if [[ -z "$dll_path" ]]; then
             echo "Could not find Jellyfin.Plugin.JMSFusion.dll in bin/Release output." >&2
             exit 1
           fi
-
           if [[ ! -f "meta.json" ]]; then
             echo "meta.json not found at repository root." >&2
             exit 1
           fi
-
           staging_dir="$RUNNER_TEMP/jmsfusion-package"
           output_dir="$RUNNER_TEMP/jmsfusion-release"
           mkdir -p "$staging_dir" "$output_dir"
-
           cp "$dll_path" "$staging_dir/Jellyfin.Plugin.JMSFusion.dll"
           cp "meta.json" "$staging_dir/meta.json"
-
           zip_path="$output_dir/$asset_name"
           md5_path="$output_dir/$md5_name"
-
           (
             cd "$staging_dir"
             zip -9 "$zip_path" Jellyfin.Plugin.JMSFusion.dll meta.json
           )
-
           checksum=$(md5sum "$zip_path" | awk '{print $1}')
           printf '%s  %s\n' "$checksum" "$asset_name" > "$md5_path"
-
           {
             echo "zip_path=$zip_path"
             echo "md5_path=$md5_path"
@@ -147,7 +133,6 @@ PY
           name: JMSFusion ${{ steps.version.outputs.version }}
           body: |
             Release asset: `${{ steps.package.outputs.asset_name }}`
-
             MD5: `${{ steps.package.outputs.checksum }}`
           files: |
             ${{ steps.package.outputs.zip_path }}
